@@ -12,17 +12,17 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
-        bgStart: '#09090b', // Zinc 950
-        bgEnd: '#18181b', // Zinc 900
-        surface: '#27272a', // Zinc 800
-        surfaceAlt: '#3f3f46', // Zinc 700
-        primary: '#10b981', // Emerald 500
-        primaryDark: '#059669', // Emerald 600
-        primaryGlow: 'rgba(16, 185, 129, 0.4)',
-        danger: '#f43f5e', // Rose 500
-        dangerDark: '#e11d48', // Rose 600
+        bgStart: 'rgb(var(--bg-start) / <alpha-value>)', 
+        bgEnd: 'rgb(var(--bg-end) / <alpha-value>)', 
+        surface: 'rgb(var(--surface) / <alpha-value>)', 
+        surfaceAlt: 'rgb(var(--surface-alt) / <alpha-value>)', 
+        primary: 'rgb(var(--primary) / <alpha-value>)', 
+        primaryDark: 'rgb(var(--primary-dark) / <alpha-value>)', 
+        primaryGlow: 'rgb(var(--primary) / 0.4)',
+        danger: 'rgb(var(--danger) / <alpha-value>)', 
+        dangerDark: 'rgb(var(--danger-dark) / <alpha-value>)', 
         textMain: '#f8fafc',
-        textMuted: '#a1a1aa', // Zinc 400
+        textMuted: '#a1a1aa', 
       },
       animation: {
         'pop': 'pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',

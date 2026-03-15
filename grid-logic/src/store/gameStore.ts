@@ -15,11 +15,14 @@ interface GameState {
   timeLeft: number | null;
   scoreCount: number;
   isShaking: boolean;
+  matchId: string | null;
+  opponent: { displayName: string } | null;
   
   // Actions
   toggleCell: (row: number, col: number) => void;
   checkWinCondition: () => void;
   startLevel: (levelNumber: number, mode?: GameMode, diff?: Difficulty) => void;
+  startDuello: (matchId: string, opponentName: string, seed: string) => void;
   resetGrid: () => void;
   useHint: () => void;
   decrementTimeLeft: () => void;
@@ -93,6 +96,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   timeLeft: null,
   scoreCount: 0,
   isShaking: false,
+  matchId: null,
+  opponent: null,
 
   decrementTimeLeft: () => {
     const { timeLeft, status } = get();
@@ -190,6 +195,9 @@ export const useGameStore = create<GameState>((set, get) => ({
          setTimeout(() => {
            get().startLevel(get().level + 1, gameMode, get().difficulty);
          }, 300);
+      } else if (gameMode === 'duello') {
+         // Stop the game, GameScreen will handle firebase update
+         set({ status: 'won' });
       } else {
          // Normal modes/daily
          set({ status: 'won' });
@@ -210,6 +218,27 @@ export const useGameStore = create<GameState>((set, get) => ({
          });
       }
     }
+  },
+
+  startDuello: (matchId, opponentName, seed) => {
+    // A standard medium level but fully seeded
+    const config = { ...getLevelConfig(1, 'medium'), seed };
+    const { cells, rowTargets, colTargets } = generateGrid(config);
+
+    set({
+      level: 1,
+      boardSize: config.size,
+      cells,
+      rowTargets,
+      colTargets,
+      status: 'playing',
+      difficulty: 'medium',
+      gameMode: 'duello',
+      matchId,
+      opponent: { displayName: opponentName },
+      timeLeft: null, // We could add a time limit to duello later
+      scoreCount: 0
+    });
   },
 
   startLevel: (levelNumber, mode, diff) => {

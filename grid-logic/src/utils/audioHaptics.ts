@@ -1,9 +1,27 @@
+import { useSettingsStore } from '../store/settingsStore';
+import { useUserStore } from '../store/userStore';
+
 // Sound Generation Utilities using Web Audio API
 
 let audioCtx: AudioContext | null = null;
+let isSoundEnabled = true;
+let isHapticsEnabled = true;
+
+// Keep local flags in sync immediately, fixes Vite HMR issues
+try {
+  isSoundEnabled = useSettingsStore.getState().soundEnabled;
+  isHapticsEnabled = useSettingsStore.getState().hapticsEnabled;
+  useSettingsStore.subscribe((state) => {
+    isSoundEnabled = state.soundEnabled;
+    isHapticsEnabled = state.hapticsEnabled;
+  });
+} catch (e) {
+  console.error("Store subscribe failed", e);
+}
 
 const getAudioContext = () => {
   if (!audioCtx) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
   if (audioCtx.state === 'suspended') {
@@ -14,10 +32,12 @@ const getAudioContext = () => {
 
 // Call this on user's first click anywhere in the app to unlock audio
 export const initAudio = () => {
+  if (!isSoundEnabled) return;
   getAudioContext();
 };
 
 export const playTone = (frequency: number, type: OscillatorType, duration: number, volume = 0.2) => {
+  if (!isSoundEnabled) return;
   try {
     const ctx = getAudioContext();
     const oscillator = ctx.createOscillator();
@@ -26,7 +46,6 @@ export const playTone = (frequency: number, type: OscillatorType, duration: numb
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
 
-    // Simple flat volume, then sharp cut-off. Much more reliable across browsers.
     gainNode.gain.setValueAtTime(volume, ctx.currentTime);
     gainNode.gain.setTargetAtTime(0, ctx.currentTime + duration * 0.8, 0.015);
 
@@ -36,24 +55,21 @@ export const playTone = (frequency: number, type: OscillatorType, duration: numb
     oscillator.start();
     oscillator.stop(ctx.currentTime + duration);
   } catch (e) {
-    console.error("Audio playback failed:", e);
+    console.warn("Audio playback failed:", e);
   }
 };
 
 export const playThud = (freq: number) => {
+  if (!isSoundEnabled) return;
   try {
     const ctx = getAudioContext();
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
-    // Sine wave is best for bassy thuds without sharp edges
     oscillator.type = 'sine';
-    
-    // Start at a lower frequency and drop fast to create that "thump"
     oscillator.frequency.setValueAtTime(freq, ctx.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.05); 
 
-    // Instant attack, very very quick decay for a clean thud
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
     gainNode.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.005);
     gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
@@ -64,49 +80,67 @@ export const playThud = (freq: number) => {
     oscillator.start();
     oscillator.stop(ctx.currentTime + 0.05);
   } catch (e) {
-    console.error("Audio playback failed:", e);
+    console.warn("Audio playback failed:", e);
+  }
+};
+
+const getEquippedSfx = () => {
+  try {
+    return useUserStore.getState().user?.equipped?.sfx || 'default';
+  } catch {
+    return 'default';
   }
 };
 
 export const playPop = () => {
-  playThud(350); // Higher pitched organic tick/thud
+  if (getEquippedSfx() === 'sfx_retro') {
+    playTone(400, 'square', 0.05, 0.1);
+  } else {
+    playThud(350);
+  }
 };
 
 export const playUnpop = () => {
-  playThud(250); // Lower pitched organic tick/thud
+  if (getEquippedSfx() === 'sfx_retro') {
+    playTone(200, 'square', 0.05, 0.1);
+  } else {
+    playThud(250);
+  }
 };
 
 export const playClick = () => {
-  // Ultra-short, deep thud for UI (menus, etc) - no pixel/8-bit sounds
-  playThud(200); 
+  if (getEquippedSfx() === 'sfx_retro') {
+    playTone(600, 'square', 0.02, 0.05);
+  } else {
+    playThud(200);
+  }
 };
 
 export const playSuccess = () => {
+  if (!isSoundEnabled) return;
   playTone(523.25, 'triangle', 0.2, 0.2); // C5
-  setTimeout(() => playTone(659.25, 'triangle', 0.2, 0.2), 100); // E5
-  setTimeout(() => playTone(783.99, 'triangle', 0.4, 0.2), 200); // G5 
-  setTimeout(() => playTone(1046.50, 'triangle', 0.6, 0.2), 300); // C6
+  setTimeout(() => { if(isSoundEnabled) playTone(659.25, 'triangle', 0.2, 0.2) }, 100); // E5
+  setTimeout(() => { if(isSoundEnabled) playTone(783.99, 'triangle', 0.4, 0.2) }, 200); // G5 
+  setTimeout(() => { if(isSoundEnabled) playTone(1046.50, 'triangle', 0.6, 0.2) }, 300); // C6
 };
 
 export const playError = () => {
+  if (!isSoundEnabled) return;
   playTone(150, 'sawtooth', 0.3, 0.2); // Buzzy error
 };
 
 // Haptic feedback standardizer
 export const vibrate = (pattern: number | number[]) => {
+  if (!isHapticsEnabled) return;
   if (navigator.vibrate) {
-    navigator.vibrate(pattern);
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      // ignore empty catch safely
+    }
   }
 };
 
-export const triggerHapticPop = () => {
-  vibrate(15); // Short, crisp pop
-};
-
-export const triggerHapticSuccess = () => {
-  vibrate([30, 50, 60]); // Ascending double buzz
-};
-
-export const triggerHapticError = () => {
-  vibrate([40, 40, 40]); // Stuttery error buzz
-};
+export const triggerHapticPop = () => vibrate(15);
+export const triggerHapticSuccess = () => vibrate([30, 50, 60]);
+export const triggerHapticError = () => vibrate([40, 40, 40]);

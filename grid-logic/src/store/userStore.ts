@@ -15,6 +15,8 @@ interface UserState {
   logout: () => Promise<void>;
   updateScore: (points: number, levelInfo: number, difficulty: import('../types/game').Difficulty) => Promise<void>;
   updateCoins: (amount: number) => Promise<void>;
+  buyItem: (itemId: string, cost: number) => Promise<boolean>;
+  equipItem: (category: string, itemId: string) => Promise<void>;
   initializeAuth: () => void;
 }
 
@@ -45,6 +47,8 @@ export const useUserStore = create<UserState>((set, get) => ({
           profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1, time_attack: 1, daily: 1 };
         }
         if (typeof profile.coins !== 'number') profile.coins = 0;
+        if (!profile.inventory) profile.inventory = [];
+        if (!profile.equipped) profile.equipped = {};
       } else {
         profile = {
           uid: user.uid,
@@ -53,7 +57,9 @@ export const useUserStore = create<UserState>((set, get) => ({
           photoURL: user.photoURL,
           scores: { easy: 0, medium: 0, hard: 0, progressive: 0, time_attack: 0, daily: 0 },
           levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
-          coins: 100 // Welcome bonus
+          coins: 100, // Welcome bonus
+          inventory: [],
+          equipped: {}
         };
         await setDoc(userRef, profile);
       }
@@ -116,6 +122,57 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  buyItem: async (itemId: string, cost: number) => {
+    const { user } = get();
+    if (!user || user.coins < cost) return false;
+    
+    // Check if already owned
+    const inventory = user.inventory || [];
+    if (inventory.includes(itemId)) return false;
+
+    const newCoins = user.coins - cost;
+    const newInventory = [...inventory, itemId];
+    
+    // Optimistic update
+    set({ user: { ...user, coins: newCoins, inventory: newInventory } });
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { 
+        coins: newCoins,
+        inventory: newInventory
+      });
+      return true;
+    } catch (error) {
+      console.error("Error buying item:", error);
+      // Revert optimism if needed (ignoring for now to keep it simple)
+      return false;
+    }
+  },
+
+  equipItem: async (category: string, itemId: string) => {
+    const { user } = get();
+    if (!user) return;
+    
+    const equipped = user.equipped || {};
+    // If selecting same item, unequip it
+    const newEquipped = { ...equipped };
+    if (newEquipped[category] === itemId) {
+       delete newEquipped[category];
+    } else {
+       newEquipped[category] = itemId;
+    }
+
+    set({ user: { ...user, equipped: newEquipped } });
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { equipped: newEquipped });
+    } catch (error) {
+       console.error("Error equipping item:", error);
+    }
+  },
+
   initializeAuth: () => {
     onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
@@ -128,6 +185,8 @@ export const useUserStore = create<UserState>((set, get) => ({
              ud.levels = { easy: 1, medium: 1, hard: 1, progressive: ud.highestLevel || 1, time_attack: 1, daily: 1 };
           }
           if (typeof ud.coins !== 'number') ud.coins = 0;
+          if (!ud.inventory) ud.inventory = [];
+          if (!ud.equipped) ud.equipped = {};
           set({ user: ud, loading: false });
         } else {
           set({ user: null, loading: false }); // Failsafe

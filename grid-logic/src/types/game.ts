@@ -1,8 +1,8 @@
 export type CellState = 'active' | 'passive';
 export type CellType = 'normal' | 'negative' | 'locked' | 'unknown';
-export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack';
+export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack' | 'duello';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive' | 'time_attack' | 'daily';
-export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop';
+export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking';
 
 export interface UserProfile {
   uid: string;
@@ -12,6 +12,8 @@ export interface UserProfile {
   scores: Record<Difficulty, number>;
   levels: Record<Difficulty, number>;
   coins: number;
+  inventory?: string[]; // IDs of purchased items
+  equipped?: Record<string, string>; // Category -> Item ID
   totalScore?: number; // legacy
   highestLevel?: number; // legacy
 }

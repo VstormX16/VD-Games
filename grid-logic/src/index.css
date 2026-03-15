@@ -4,12 +4,44 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&family=JetBrains+Mono:wght@700&display=swap');
 
+:root {
+  --bg-start: 9 9 11;
+  --bg-end: 24 24 27;
+  --surface: 39 39 42;
+  --surface-alt: 63 63 70;
+  --primary: 16 185 129;
+  --primary-dark: 5 150 105;
+  --danger: 244 63 94;
+  --danger-dark: 225 29 72;
+}
+
+html[data-theme="theme_neon"] {
+  --bg-start: 2 6 23;
+  --bg-end: 15 23 42;
+  --surface: 30 41 59;
+  --surface-alt: 51 65 85;
+  --primary: 14 165 233;
+  --primary-dark: 2 132 199;
+  --danger: 244 63 94;
+  --danger-dark: 225 29 72;
+}
+
+html[data-theme="theme_crimson"] {
+  --bg-start: 20 0 0;
+  --bg-end: 45 0 0;
+  --surface: 80 10 10;
+  --surface-alt: 110 20 20;
+  --primary: 225 29 72;
+  --primary-dark: 190 18 60;
+  --danger: 250 204 21; /* Yellow */
+  --danger-dark: 234 179 8;
+}
+
 @layer base {
+
   body {
     @apply bg-bgStart text-textMain antialiased overflow-x-hidden select-none;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: radial-gradient(circle at top, theme('colors.bgEnd') 0%, theme('colors.bgStart') 100%);
-    background-attachment: fixed;
     /* Prevent bouncing on mobile */
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
@@ -18,6 +50,8 @@
 
 #root {
   @apply min-h-[100dvh] flex flex-col items-center w-full;
+  background: radial-gradient(circle at top, theme('colors.bgEnd') 0%, theme('colors.bgStart') 100%);
+  background-attachment: fixed;
 }
 
 @layer utilities {
