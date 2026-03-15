@@ -1,8 +1,8 @@
 export type CellState = 'active' | 'passive';
 export type CellType = 'normal' | 'negative' | 'locked' | 'unknown';
 export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack';
-export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive';
-export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile';
+export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive' | 'time_attack' | 'daily';
+export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop';
 
 export interface UserProfile {
   uid: string;
@@ -11,6 +11,7 @@ export interface UserProfile {
   photoURL: string | null;
   scores: Record<Difficulty, number>;
   levels: Record<Difficulty, number>;
+  coins: number;
   totalScore?: number; // legacy
   highestLevel?: number; // legacy
 }
@@ -31,6 +32,7 @@ export interface GridConfig {
   negativeChance: number;
   lockChance: number;
   unknownChance: number;
+  seed?: string;
 }
 
 export interface LevelData {

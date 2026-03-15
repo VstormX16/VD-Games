@@ -14,6 +14,7 @@ interface UserState {
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateScore: (points: number, levelInfo: number, difficulty: import('../types/game').Difficulty) => Promise<void>;
+  updateCoins: (amount: number) => Promise<void>;
   initializeAuth: () => void;
 }
 
@@ -39,17 +40,20 @@ export const useUserStore = create<UserState>((set, get) => ({
         profile = userSnap.data() as UserProfile;
         if (!profile.scores) {
           // Migration
-          profile.scores = { easy: 0, medium: 0, hard: 0, progressive: profile.totalScore || 0 };
-          profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1 };
+          // Migration
+          profile.scores = { easy: 0, medium: 0, hard: 0, progressive: profile.totalScore || 0, time_attack: 0, daily: 0 };
+          profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1, time_attack: 1, daily: 1 };
         }
+        if (typeof profile.coins !== 'number') profile.coins = 0;
       } else {
         profile = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          scores: { easy: 0, medium: 0, hard: 0, progressive: 0 },
-          levels: { easy: 1, medium: 1, hard: 1, progressive: 1 }
+          scores: { easy: 0, medium: 0, hard: 0, progressive: 0, time_attack: 0, daily: 0 },
+          levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
+          coins: 100 // Welcome bonus
         };
         await setDoc(userRef, profile);
       }
@@ -97,6 +101,21 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  updateCoins: async (amount) => {
+    const { user } = get();
+    if (!user) return;
+    
+    const newCoins = (user.coins || 0) + amount;
+    set({ user: { ...user, coins: newCoins } });
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { coins: newCoins });
+    } catch (error) {
+       console.error("Error updating coins:", error);
+    }
+  },
+
   initializeAuth: () => {
     onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
@@ -105,9 +124,10 @@ export const useUserStore = create<UserState>((set, get) => ({
         if (userSnap.exists()) {
           const ud = userSnap.data() as UserProfile;
           if (!ud.scores) {
-             ud.scores = { easy: 0, medium: 0, hard: 0, progressive: ud.totalScore || 0 };
-             ud.levels = { easy: 1, medium: 1, hard: 1, progressive: ud.highestLevel || 1 };
+             ud.scores = { easy: 0, medium: 0, hard: 0, progressive: ud.totalScore || 0, time_attack: 0, daily: 0 };
+             ud.levels = { easy: 1, medium: 1, hard: 1, progressive: ud.highestLevel || 1, time_attack: 1, daily: 1 };
           }
+          if (typeof ud.coins !== 'number') ud.coins = 0;
           set({ user: ud, loading: false });
         } else {
           set({ user: null, loading: false }); // Failsafe

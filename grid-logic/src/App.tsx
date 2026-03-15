@@ -5,12 +5,13 @@ import { useUserStore } from './store/userStore';
 import { Grid } from './components/Grid';
 import { 
   Play, RotateCcw, Lightbulb, Hexagon, 
-  Wifi, Target, User as UserIcon, LogOut, Medal, ArrowLeft 
+  Wifi, Target, User as UserIcon, LogOut, Medal, ArrowLeft, Clock, Flame, BookOpen, Lock, ShoppingBag, Coins 
 } from 'lucide-react';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import type { Difficulty } from './types/game';
 import { initAudio, playClick } from './utils/audioHaptics';
+import confetti from 'canvas-confetti';
 
 const MainMenu = () => {
   const { startLevel } = useGameStore();
@@ -54,6 +55,11 @@ const MainMenu = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-white">
+      <div className="absolute top-6 right-6 flex items-center gap-2 bg-yellow-500/10 text-yellow-500 px-3 py-1.5 rounded-full border border-yellow-500/20 font-bold font-mono text-sm z-20 shadow-lg">
+        <Coins className="w-4 h-4" />
+        {user?.coins || 0}
+      </div>
+
       <div className="w-80 h-80 bg-primary opacity-[0.05] rounded-full blur-3xl absolute top-0 -translate-y-1/2 pointer-events-none" />
 
       <div className="text-center flex flex-col items-center w-full relative mb-4">
@@ -98,6 +104,42 @@ const MainMenu = () => {
 
         <div className="flex gap-4 w-full">
           <button 
+            onClick={() => {
+              if (user) {
+                initAudio();
+                startLevel(1, 'time_attack', 'time_attack');
+                setView('game');
+              } else {
+                setView('auth');
+              }
+            }}
+            className="neo-button flex-1 py-4 bg-purple-500/10 text-purple-400 font-display font-bold rounded-2xl shadow-xl border border-purple-500/20 flex flex-col items-center justify-center gap-1 hover:bg-purple-500/20"
+          >
+            <Clock className="w-6 h-6 mb-1" />
+            <span className="text-xs uppercase tracking-wider">Zamana Karşı</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              if (user) {
+                initAudio();
+                startLevel(1, 'daily', 'daily');
+                setView('game');
+              } else {
+                setView('auth');
+              }
+            }}
+            className="neo-button flex-1 py-4 bg-orange-500/10 text-orange-400 font-display font-bold rounded-2xl shadow-xl border border-orange-500/20 flex flex-col items-center justify-center gap-1 hover:bg-orange-500/20"
+          >
+            <Flame className="w-6 h-6 mb-1" />
+            <span className="text-xs uppercase tracking-wider">Günün Sorusu</span>
+          </button>
+        </div>
+
+        <div className="w-full h-px bg-white/5 my-2" />
+
+        <div className="flex gap-4 w-full">
+          <button 
             onClick={() => setView('leaderboard')}
             className="neo-button flex-1 py-4 bg-surface text-textMain font-display font-bold rounded-2xl shadow-xl border border-white/5 flex items-center justify-center gap-2 hover:bg-surfaceAlt"
           >
@@ -113,6 +155,27 @@ const MainMenu = () => {
           >
             <UserIcon className="w-5 h-5 text-primary" />
             {user ? 'Profil' : 'Giriş Yap'}
+          </button>
+        </div>
+        
+        <div className="flex gap-4 w-full">
+          <button 
+            onClick={() => setView('guide')}
+            className="neo-button flex-1 py-4 mt-2 bg-surface text-textMuted font-display font-bold rounded-2xl shadow-sm border border-white/5 flex items-center justify-center gap-2 hover:bg-surfaceAlt hover:text-white transition-colors"
+          >
+            <BookOpen className="w-5 h-5" />
+            Nasıl Oynanır?
+          </button>
+
+          <button 
+            onClick={() => {
+              if (user) setView('shop');
+              else setView('auth');
+            }}
+            className="neo-button flex-1 py-4 mt-2 bg-yellow-500/10 text-yellow-500 font-display font-bold rounded-2xl shadow-[0_4px_15px_rgba(234,179,8,0.15)] border border-yellow-500/20 flex items-center justify-center gap-2 hover:bg-yellow-500/20 transition-colors"
+          >
+            <ShoppingBag className="w-5 h-5" />
+            Mağaza
           </button>
         </div>
       </div>
@@ -235,6 +298,118 @@ const LeaderboardScreen = () => {
   );
 };
 
+const GuideScreen = () => {
+  const { setView } = useUserStore();
+  
+  return (
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-white overflow-y-auto pb-12">
+      <div className="flex items-center gap-4 mb-8 sticky top-0 py-2 bg-bgStart/90 backdrop-blur z-20">
+        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button border border-white/5 shrink-0">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-3xl font-display font-black leading-none">Nasıl Oynanır?</h2>
+      </div>
+
+      <div className="space-y-6">
+        {/* Basic Rules */}
+        <div className="bg-surface p-6 rounded-[2rem] border border-white/5">
+           <h3 className="text-xl font-display font-bold text-primary mb-3">Temel Kural</h3>
+           <p className="text-textMuted text-sm leading-relaxed mb-4">
+             Oyunun amacı çok basit: <span className="text-white font-bold">Kutuları seçerek</span> (üzerlerine tıklayıp zümrüt yeşili yaparak) satırların sonunda ve sütunların altında yazan 
+             <span className="text-white font-bold"> Hedef Sayılara</span> ulaşmak.
+           </p>
+           <p className="text-textMuted text-sm leading-relaxed">
+             Tüm satır ve sütun hedefleri <span className="text-primary font-bold bg-primary/20 px-1 rounded">Yeşil</span> olduğunda o bölümü kazanırsın!
+           </p>
+        </div>
+
+        {/* Locked Boxes */}
+        <div className="bg-surface p-6 rounded-[2rem] border border-white/5 relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-[100px] pointer-events-none" />
+           <Lock className="absolute top-6 right-6 w-8 h-8 text-white/20" />
+           
+           <h3 className="text-xl font-display font-bold text-white mb-3">Asma Kilitli Kutular</h3>
+           <p className="text-textMuted text-sm leading-relaxed mb-3">
+             Bölümler ilerledikçe bazı kutularda asma kilit 🔒 göreceksin. Kilitli kutulara <span className="text-white font-bold underline">dokunamazsın.</span>
+           </p>
+           <ul className="text-sm space-y-2 text-textMuted">
+             <li className="flex items-start gap-2">
+               <span className="text-primary mt-0.5">■</span> 
+               <span>Eğer kilit <span className="text-white font-bold">Yeşil (Aktif)</span> durumdaysa, o sayı sana yardım olsun diye otomatik olarak verilmiştir ve hesaba katılmaz zorundadır.</span>
+             </li>
+             <li className="flex items-start gap-2">
+               <span className="text-textMuted/50 mt-0.5">■</span> 
+               <span>Eğer kilit <span className="text-white font-bold">Gri (Pasif)</span> durumdaysa, o sayıyı kesinlikle kullanmamanı ister.</span>
+             </li>
+           </ul>
+        </div>
+
+        {/* Negative Boxes */}
+        <div className="bg-danger/5 border border-danger/20 p-6 rounded-[2rem] relative overflow-hidden">
+           <div className="absolute top-6 right-6 w-10 h-10 rounded-full bg-danger/20 text-danger flex items-center justify-center text-xl font-bold font-mono">
+              -
+           </div>
+           
+           <h3 className="text-xl font-display font-bold text-danger mb-3">Negatif Mayınlar</h3>
+           <p className="text-textMuted text-sm leading-relaxed mb-3">
+             Zor zorluklarda bazı kutuların köşesinde "Kırmızı Eksi" bulunur. Bunlara tıkladığında sayıyı <span className="text-white font-bold">TOPLAMAZ, hedefinden ÇIKARIR.</span>
+           </p>
+           <div className="bg-bgStart/50 p-3 rounded-xl border border-danger/10 text-xs text-textMuted/90">
+             <span className="text-danger font-bold">Örnek:</span> Hedefin 10 ise ve elinde [7], [5] ve [-2] varsa;<br/>
+             7'yi aç + 5'i aç + kırmızı 2'yi aç =  <span className="text-white font-bold">7 + 5 - 2 = 10!</span>
+           </div>
+        </div>
+
+        {/* Unknown Boxes */}
+        <div className="bg-surface p-6 rounded-[2rem] border border-white/5 relative overflow-hidden">
+           <div className="absolute top-6 right-6 text-4xl font-display font-black text-white/10">?</div>
+           
+           <h3 className="text-xl font-display font-bold text-white mb-3">Gizli Kutular</h3>
+           <p className="text-textMuted text-sm leading-relaxed mb-3">
+             Gerçek zeka testi burada başlar. İleri seviyelerde kutuların içinde sayı yerine <span className="text-white font-bold text-lg">?</span> yazar. 
+             İçinde ne yazdığını ancak satırın sonundaki hedeften geriye doğru matematik yaparak Sudoku gibi tahmin edebilirsin!
+           </p>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+const ShopScreen = () => {
+  const { user, setView } = useUserStore();
+
+  if (!user) {
+    setView('menu');
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-white overflow-y-auto pb-12">
+      <div className="flex items-center justify-between gap-4 mb-8 sticky top-0 py-2 bg-bgStart/90 backdrop-blur z-20">
+        <div className="flex items-center gap-4">
+          <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button border border-white/5 shrink-0">
+             <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h2 className="text-3xl font-display font-black leading-none">Mağaza</h2>
+        </div>
+        <div className="flex items-center gap-2 bg-yellow-500/10 text-yellow-500 px-3 py-1.5 rounded-full border border-yellow-500/20 font-bold font-mono text-sm">
+           <Coins className="w-4 h-4" />
+           {user.coins}
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="text-center p-8 border border-dashed border-white/10 rounded-3xl bg-surface/30">
+           <ShoppingBag className="w-12 h-12 text-primary mx-auto mb-4 opacity-50" />
+           <h3 className="font-display font-bold text-xl mb-2">Çok Yakında</h3>
+           <p className="text-textMuted text-sm">Altınlarla alabileceğiniz yeni renk temaları, tahta arka planları, ve avatar rozetleri yapım aşamasında. Altınlarınızı biriktirmeye başlayın!</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProfileScreen = () => {
   const { user, logout, setView } = useUserStore();
 
@@ -315,21 +490,50 @@ const ProfileScreen = () => {
 };
 
 const VictoryScreen = () => {
-  const { level, startLevel } = useGameStore();
+  const { level, startLevel, gameMode } = useGameStore();
+
+  useEffect(() => {
+    confetti({
+      particleCount: 150,
+      spread: 100,
+      origin: { y: 0.5 },
+      colors: ['#10b981', '#f43f5e', '#ffffff']
+    });
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-white/10 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-2xl relative z-10 overflow-hidden">
         <h2 className="text-6xl font-display font-black text-white mb-2">BÖLÜM {level}</h2>
-        <p className="text-primary font-bold tracking-[0.2em] mb-10 text-sm">TAMAMLANDI</p>
-
-        <button 
-          onClick={() => startLevel(level + 1)}
-          className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
-        >
-          <Play className="fill-current w-6 h-6" />
-          Sıradaki Hedef
-        </button>
+        {gameMode === 'daily' ? (
+          <>
+            <p className="text-orange-400 font-bold tracking-widest text-sm mb-6">GÜNLÜK MOD TAMAMLANDI</p>
+            <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-6 flex flex-col items-center">
+               <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Altın</p>
+               <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
+                 +50 <Coins className="w-6 h-6" />
+               </p>
+            </div>
+            <p className="text-textMuted mb-8 leading-relaxed">Yeni günün zeka bulmacası yarın gece yarısı tekrar burada olacak. Harika iş çıkardın!</p>
+          </>
+        ) : (
+          <>
+            <p className="text-primary font-bold tracking-[0.2em] mb-6 text-sm">TAMAMLANDI</p>
+            <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-8 flex flex-col items-center">
+               <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Altın</p>
+               <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
+                 +10 <Coins className="w-6 h-6" />
+               </p>
+            </div>
+            <button 
+              onClick={() => startLevel(level + 1)}
+              className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
+            >
+              <Play className="fill-current w-6 h-6" />
+              Sıradaki Hedef
+            </button>
+          </>
+        )}
         <button 
           onClick={() => useUserStore.getState().setView('menu')}
           className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-white"
@@ -341,37 +545,100 @@ const VictoryScreen = () => {
   );
 };
 
+const GameOverScreen = () => {
+  const { scoreCount } = useGameStore();
+  const { setView } = useUserStore();
+  
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
+      <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
+        <h2 className="text-4xl font-display font-black text-white mb-2">SÜRE BİTTİ</h2>
+        <p className="text-danger font-bold tracking-[0.2em] mb-6 text-sm">ZAMANA KARŞI MODU</p>
+        
+        <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
+           <p className="text-textMuted text-xs font-bold uppercase tracking-wider mb-2">Kazanılan Skor</p>
+           <p className="text-5xl font-mono font-black text-purple-400">{scoreCount}</p>
+        </div>
+
+        <button 
+          onClick={() => {
+            initAudio();
+            useGameStore.getState().startLevel(1, 'time_attack', 'time_attack');
+          }}
+          className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
+        >
+          <RotateCcw className="w-6 h-6" />
+          Tekrar Dene
+        </button>
+        <button 
+          onClick={() => setView('menu')}
+          className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-white"
+        >
+          Ana Menüye Dön
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const GameScreen = () => {
-  const { level, gameMode, resetGrid, useHint, status } = useGameStore();
+  const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount } = useGameStore();
   const { setView } = useUserStore();
 
+  useEffect(() => {
+    if (status !== 'playing' || timeLeft === null || gameMode !== 'time_attack') return;
+    
+    // Timer interval
+    const timer = setInterval(() => {
+      decrementTimeLeft();
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [status, timeLeft, decrementTimeLeft, gameMode]);
+
   if (status === 'won') return <VictoryScreen />;
+  if (status === 'lost' && gameMode === 'time_attack') return <GameOverScreen />;
 
   return (
-    <div className="flex flex-col min-h-[100dvh] w-full max-w-md mx-auto relative z-10 animate-fade-in pt-safe pb-safe">
-      <header className="glass-header sticky top-0 z-20 flex items-center justify-between px-6 py-4">
-        <button 
-          onClick={() => setView('menu')} 
-          className="w-10 h-10 bg-surface rounded-xl flex items-center justify-center hover:bg-surfaceAlt border border-white/5 neo-button"
-        >
-          <ArrowLeft className="w-5 h-5 text-textMain" />
-        </button>
-        <div className="flex flex-col items-end">
-          <span className={clsx(
-            "font-bold tracking-[0.2em] text-[10px] uppercase opacity-80",
-            gameMode === 'online' ? 'text-primary' : 'text-textMuted'
-          )}>
-            {gameMode === 'online' ? 'Çevrimiçi Seri' : 'Çevrimdışı'}
-          </span>
-          <h1 className="text-2xl font-display font-black text-white">Bölüm {level}</h1>
+    <div className="flex flex-col min-h-[100dvh] w-full relative z-10 animate-fade-in pt-safe pb-safe">
+      <header className="glass-header sticky top-0 z-20 w-full relative">
+        <div className="w-full max-w-md mx-auto flex items-center justify-between px-6 py-4 relative">
+          <button 
+            onClick={() => setView('menu')} 
+            className="w-10 h-10 bg-surface rounded-xl flex items-center justify-center hover:bg-surfaceAlt border border-white/5 neo-button"
+          >
+            <ArrowLeft className="w-5 h-5 text-textMain" />
+          </button>
+          <div className="flex flex-col items-end shrink-0">
+            <span className={clsx(
+              "font-bold tracking-[0.2em] text-[10px] uppercase opacity-80",
+              gameMode === 'online' ? 'text-primary' : 
+              gameMode === 'time_attack' ? 'text-purple-400' :
+              gameMode === 'daily' ? 'text-orange-400' : 'text-textMuted'
+            )}>
+              {gameMode === 'online' ? 'Çevrimiçi Seri' : 
+               gameMode === 'time_attack' ? `Skor: ${scoreCount}` : 
+               gameMode === 'daily' ? 'Günün Sorusu' : 'Çevrimdışı'}
+            </span>
+            <h1 className="text-2xl font-display font-black text-white">
+              {gameMode === 'daily' ? 'Meydan Okuma' : `Bölüm ${level}`}
+            </h1>
+          </div>
+          
+          {/* Timer overlay for absolute center if time attack */}
+          {gameMode === 'time_attack' && timeLeft !== null && (
+            <div className="absolute left-1/2 -translate-x-1/2 font-mono font-black text-3xl text-purple-400 flex items-center gap-2 drop-shadow-lg pointer-events-none">
+               {timeLeft}s
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center -mt-6">
+      <main className="flex-1 flex flex-col items-center justify-center -mt-6 w-full max-w-md mx-auto">
         <Grid />
       </main>
 
-      <footer className="p-6 flex gap-4 w-full">
+      <footer className="p-6 flex gap-4 w-full max-w-md mx-auto">
         <button onClick={useHint} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt">
           <Lightbulb className="w-5 h-5 text-primary" />
           <span className="font-display tracking-wide">İPUCU</span>
@@ -414,6 +681,8 @@ export default function App() {
       {currentView === 'menu' && <MainMenu />}
       {currentView === 'auth' && <AuthScreen />}
       {currentView === 'game' && <GameScreen />}
+      {currentView === 'guide' && <GuideScreen />}
+      {currentView === 'shop' && <ShopScreen />}
       {currentView === 'leaderboard' && <LeaderboardScreen />}
       {currentView === 'profile' && <ProfileScreen />}
     </div>

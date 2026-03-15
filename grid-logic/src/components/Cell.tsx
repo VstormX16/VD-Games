@@ -10,22 +10,43 @@ interface CellProps {
 
 export const Cell: React.FC<CellProps> = ({ data }) => {
   const toggleCell = useGameStore(state => state.toggleCell);
+  const boardSize = useGameStore(state => state.boardSize);
 
   const isActive = data.state === 'active';
   const isLocked = data.type === 'locked';
   const isNegative = data.type === 'negative';
   const isUnknown = data.type === 'unknown';
 
-  let displayValue = data.value.toString();
+  let displayValue = Math.abs(data.value).toString();
   if (isUnknown) displayValue = '?';
+
+  const isLargeBoard = boardSize > 4;
+  const isHugeBoard = boardSize > 5;
+
+  const textSizeClass = 
+    isHugeBoard ? 'text-lg sm:text-xl rounded-lg' :
+    isLargeBoard ? 'text-xl sm:text-2xl rounded-xl' :
+    boardSize === 4 ? 'text-3xl sm:text-4xl rounded-[1rem]' :
+    'text-4xl sm:text-5xl rounded-[1.25rem]';
+
+  const badgeSize = 
+    isHugeBoard ? 'w-2.5 h-2.5 text-[8px] bottom-1 right-1' :
+    isLargeBoard ? 'w-4 h-4 text-[10px] bottom-1.5 right-1.5' :
+    'w-5 h-5 text-xs bottom-2 right-2';
+
+  const lockSize = 
+    isHugeBoard ? 'w-2 h-2 top-1 right-1' :
+    isLargeBoard ? 'w-2.5 h-2.5 top-1.5 right-1.5' :
+    'w-3.5 h-3.5 top-2 right-2';
 
   return (
     <button
       onClick={() => toggleCell(data.row, data.col)}
       disabled={isLocked}
       className={clsx(
-        'grid-cell neo-button relative flex items-center justify-center font-display font-bold w-full select-none rounded-[1.25rem]',
-        'aspect-square text-3xl sm:text-4xl shadow-sm border border-white/[0.05]',
+        'grid-cell neo-button relative flex items-center justify-center font-display font-bold w-full select-none',
+        'aspect-square shadow-sm border border-white/[0.05] overflow-hidden',
+        textSizeClass,
         
         // Passive state (Unselected, elevated)
         !isActive && 'bg-surface text-textMuted hover:bg-surfaceAlt',
@@ -45,14 +66,15 @@ export const Cell: React.FC<CellProps> = ({ data }) => {
       <span className={clsx("relative z-10 drop-shadow-md", isActive && "translate-y-[1px]")}>{displayValue}</span>
 
       {isLocked && (
-        <Lock fill="currentColor" className="absolute top-2 right-2 w-3.5 h-3.5 text-textMain/20" />
+        <Lock fill="currentColor" className={clsx("absolute text-textMain/20", lockSize)} />
       )}
       {isNegative && (
         <div className={clsx(
-          "absolute bottom-2 right-2 flex items-center justify-center w-5 h-5 rounded-full",
-           isActive ? "bg-black/20 text-white" : "bg-danger/20 text-danger"
+          "absolute flex items-center justify-center rounded-full",
+          badgeSize,
+          isActive ? "bg-black/20 text-white" : "bg-danger/20 text-danger"
         )}>
-          <span className="text-xs absolute -mt-0.5 font-bold">−</span>
+          <span className="absolute font-bold" style={{ marginTop: '-1px' }}>−</span>
         </div>
       )}
     </button>

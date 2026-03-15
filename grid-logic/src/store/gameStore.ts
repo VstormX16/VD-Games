@@ -12,6 +12,9 @@ interface GameState {
   gameMode: GameMode;
   difficulty: Difficulty;
   status: 'playing' | 'won' | 'lost';
+  timeLeft: number | null;
+  scoreCount: number;
+  isShaking: boolean;
   
   // Actions
   toggleCell: (row: number, col: number) => void;
@@ -19,6 +22,8 @@ interface GameState {
   startLevel: (levelNumber: number, mode?: GameMode, diff?: Difficulty) => void;
   resetGrid: () => void;
   useHint: () => void;
+  decrementTimeLeft: () => void;
+  setShaking: (shaking: boolean) => void;
 }
 
 const getLevelConfig = (level: number, difficulty: Difficulty): GridConfig => {
@@ -85,6 +90,30 @@ export const useGameStore = create<GameState>((set, get) => ({
   gameMode: 'offline',
   difficulty: 'progressive',
   status: 'playing',
+  timeLeft: null,
+  scoreCount: 0,
+  isShaking: false,
+
+  decrementTimeLeft: () => {
+    const { timeLeft, status } = get();
+    if (status !== 'playing' || timeLeft === null) return;
+    
+    if (timeLeft <= 1) {
+      set({ timeLeft: 0, status: 'lost' }); // Time's up
+      playError();
+      import('./userStore').then(module => {
+         const { useUserStore } = module;
+         const { user, updateScore } = useUserStore.getState();
+         if (user && get().scoreCount > 0) {
+           updateScore(get().scoreCount, get().level, 'time_attack');
+         }
+      });
+    } else {
+      set({ timeLeft: timeLeft - 1 });
+    }
+  },
+
+  setShaking: (isShaking) => set({ isShaking }),
 
   toggleCell: (row, col) => {
     const { cells, status } = get();
@@ -94,6 +123,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (cell.type === 'locked') {
       playError();
       triggerHapticError();
+      set({ isShaking: true });
+      setTimeout(() => set({ isShaking: false }), 400); // Remove shake after animation (0.4s)
       return;
     }
 
@@ -143,25 +174,57 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     if (isWon) {
-      set({ status: 'won' });
       playSuccess();
       triggerHapticSuccess();
-      // Award 100 points * board size
       const points = boardSize * 100;
-      // Get the useUserStore from outside
-      import('./userStore').then(module => {
-         const { useUserStore } = module;
-         const { user, updateScore } = useUserStore.getState();
-         if (get().gameMode === 'online' && user) {
-           updateScore(points, get().level, get().difficulty);
-         }
-      });
+      
+      const { gameMode } = get();
+      
+      if (gameMode === 'time_attack') {
+         // In time attack, do not show victory screen, just play confetti maybe later, add time and loop
+         set(state => ({ 
+            timeLeft: (state.timeLeft || 0) + 10, 
+            scoreCount: state.scoreCount + points 
+         }));
+         // Delay very slightly for feel, then restart
+         setTimeout(() => {
+           get().startLevel(get().level + 1, gameMode, get().difficulty);
+         }, 300);
+      } else {
+         // Normal modes/daily
+         set({ status: 'won' });
+         
+         import('./userStore').then(module => {
+            const { useUserStore } = module;
+            const { user, updateScore, updateCoins } = useUserStore.getState();
+            if (user) {
+              if (gameMode === 'online') {
+                updateScore(points, get().level, get().difficulty);
+                updateCoins(10); // Standard victory coins
+              }
+              if (gameMode === 'daily') {
+                updateScore(points, 1, 'daily');
+                updateCoins(50); // Daily chunk of coins
+              }
+            }
+         });
+      }
     }
   },
 
   startLevel: (levelNumber, mode, diff) => {
+    const selectedMode = mode || get().gameMode;
     const selectedDifficulty = diff || get().difficulty;
-    const config = getLevelConfig(levelNumber, selectedDifficulty);
+    
+    // For Daily Challenge, always use 'medium' difficulty sizing via a seed
+    const effectiveDifficulty = selectedMode === 'daily' ? 'medium' : selectedDifficulty;
+    let config = getLevelConfig(levelNumber, effectiveDifficulty);
+    
+    if (selectedMode === 'daily') {
+       const today = new Date().toISOString().split('T')[0];
+       config = { ...config, seed: today, unknownChance: 0.1, negativeChance: 0.2 }; // Override for daily excitement
+    }
+    
     const { cells, rowTargets, colTargets } = generateGrid(config);
     
     set({
@@ -172,7 +235,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       colTargets,
       status: 'playing',
       difficulty: selectedDifficulty,
-      ...(mode && { gameMode: mode }),
+      gameMode: selectedMode,
+      ...(selectedMode === 'time_attack' && levelNumber === 1 && { timeLeft: 60, scoreCount: 0 })
     });
   },
 
