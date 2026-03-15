@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&family=JetBrains+Mono:wght@700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-bgStart text-textMain antialiased overflow-x-hidden select-none;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(circle at top, theme('colors.bgEnd') 0%, theme('colors.bgStart') 100%);
+    background-attachment: fixed;
+    /* Prevent bouncing on mobile */
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+#root {
+  @apply min-h-[100dvh] flex flex-col items-center w-full;
+}
+
+@layer utilities {
+  .neo-button {
+    @apply relative overflow-hidden transition-all duration-200 active:scale-95;
+  }
+  .glass-header {
+    @apply bg-bgStart/80 backdrop-blur-xl border-b border-white/5;
+  }
+}

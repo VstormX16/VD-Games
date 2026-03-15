@@ -1,0 +1,421 @@
+import { useEffect, useState } from 'react';
+import clsx from 'clsx';
+import { useGameStore } from './store/gameStore';
+import { useUserStore } from './store/userStore';
+import { Grid } from './components/Grid';
+import { 
+  Play, RotateCcw, Lightbulb, Hexagon, 
+  Wifi, Target, User as UserIcon, LogOut, Medal, ArrowLeft 
+} from 'lucide-react';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from './lib/firebase';
+import type { Difficulty } from './types/game';
+import { initAudio, playClick } from './utils/audioHaptics';
+
+const MainMenu = () => {
+  const { startLevel } = useGameStore();
+  const { setView, user } = useUserStore();
+  const [selectedMode, setSelectedMode] = useState<'offline' | 'online' | null>(null);
+
+  if (selectedMode) {
+    const handleStart = (diff: Difficulty) => {
+      initAudio();
+      startLevel(1, selectedMode, diff);
+      setView('game');
+    };
+
+    return (
+     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-4 animate-fade-in relative z-10 text-white">
+        <h2 className="text-3xl font-display font-black mb-8">Zorluk Seçimi</h2>
+        
+        <button onClick={() => handleStart('easy')} className="neo-button w-full py-5 bg-surface text-textMain font-display font-bold text-lg rounded-2xl shadow-xl flex items-center justify-center gap-3 border border-white/5 hover:bg-surfaceAlt">
+          KOLAY (3x3 Sabit)
+        </button>
+        <button onClick={() => handleStart('medium')} className="neo-button w-full py-5 bg-surface text-textMain font-display font-bold text-lg rounded-2xl shadow-xl flex items-center justify-center gap-3 border border-white/5 hover:bg-surfaceAlt">
+          ORTA (5x5 Sabit)
+        </button>
+        <button onClick={() => handleStart('hard')} className="neo-button w-full py-5 bg-surface text-danger font-display font-bold text-lg rounded-2xl shadow-xl flex items-center justify-center gap-3 border border-danger/20 hover:bg-surfaceAlt">
+          ZOR (7x7 / Tuzaklı)
+        </button>
+        
+        <div className="w-full h-px bg-white/10 my-2" />
+
+        <button onClick={() => handleStart('progressive')} className="neo-button w-full py-5 bg-primary/10 text-primary font-display font-black text-xl rounded-2xl shadow-[0_8px_30px_rgba(16,185,129,0.25)] flex items-center justify-center gap-3 border border-primary/50">
+          İLERLEMELİ (Normal)
+        </button>
+        <p className="text-textMuted text-xs text-center px-4 mb-4">Bölümler ilerledikçe tahta büyür ve yeni tuzaklar belirir.</p>
+
+        <button onClick={() => setSelectedMode(null)} className="neo-button p-4 bg-surface rounded-xl hover:bg-surfaceAlt border border-white/5">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+     </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-white">
+      <div className="w-80 h-80 bg-primary opacity-[0.05] rounded-full blur-3xl absolute top-0 -translate-y-1/2 pointer-events-none" />
+
+      <div className="text-center flex flex-col items-center w-full relative mb-4">
+        <div className="relative mb-6 group">
+          <div className="absolute inset-0 bg-primary opacity-20 blur-xl rounded-full scale-150 transition-transform group-hover:scale-125 duration-1000" />
+          <div className="w-24 h-24 bg-surface rounded-[2rem] border border-white/10 flex items-center justify-center shadow-2xl relative z-10 rotate-3">
+             <Hexagon size={48} className="text-primary -rotate-3" strokeWidth={1.5} />
+             <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/20 to-transparent rounded-b-[2rem]" />
+          </div>
+        </div>
+
+        <h1 className="text-5xl font-display font-black mb-2 tracking-tight drop-shadow-md">
+          GRID LOGIC
+        </h1>
+        <p className="text-primary font-bold tracking-[0.3em] text-xs uppercase opacity-80 mb-2">
+          Sayısal Gölgeler
+        </p>
+      </div>
+
+      <div className="w-full flex flex-col gap-4">
+        <button 
+          onClick={() => setSelectedMode('offline')}
+          className="neo-button w-full py-5 bg-surface text-textMain font-display font-bold text-lg rounded-2xl shadow-xl flex items-center justify-center gap-3 border border-white/5 hover:bg-surfaceAlt"
+        >
+          <Target className="w-6 h-6 text-textMuted" />
+          ÇEVRİMDIŞI OYNA
+        </button>
+
+        <button 
+          onClick={() => {
+            if (user) {
+              setSelectedMode('online');
+            } else {
+              setView('auth');
+            }
+          }}
+          className="neo-button w-full py-5 bg-primary text-white font-display font-bold text-lg rounded-2xl shadow-[0_8px_30px_rgba(16,185,129,0.25)] flex items-center justify-center gap-3 border border-primary/50"
+        >
+          <Wifi className="w-6 h-6" />
+          ÇEVRİMİÇİ (SKORLU)
+        </button>
+
+        <div className="flex gap-4 w-full">
+          <button 
+            onClick={() => setView('leaderboard')}
+            className="neo-button flex-1 py-4 bg-surface text-textMain font-display font-bold rounded-2xl shadow-xl border border-white/5 flex items-center justify-center gap-2 hover:bg-surfaceAlt"
+          >
+            <Medal className="w-5 h-5 text-yellow-500" />
+            Liderlik
+          </button>
+          <button 
+            onClick={() => {
+              if (user) setView('profile');
+              else setView('auth');
+            }}
+            className="neo-button flex-1 py-4 bg-surface text-textMain font-display font-bold rounded-2xl shadow-xl border border-white/5 flex items-center justify-center gap-2 hover:bg-surfaceAlt"
+          >
+            <UserIcon className="w-5 h-5 text-primary" />
+            {user ? 'Profil' : 'Giriş Yap'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AuthScreen = () => {
+  const { signInWithGoogle, setView, loading } = useUserStore();
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-white">
+      <h2 className="text-3xl font-display font-black mb-4">Hoş Geldin!</h2>
+      <p className="text-center text-textMuted mb-8">
+        Çevrimiçi modda oynayıp puan kazanmak ve liderlik tablosuna girmek için Google ile giriş yapmalısın.
+      </p>
+
+      <button 
+        onClick={() => signInWithGoogle()}
+        disabled={loading}
+        className="neo-button w-full py-5 bg-white text-bgStart font-display font-bold text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
+      >
+        {loading ? 'Yükleniyor...' : 'Google ile Giriş Yap'}
+      </button>
+
+      <button 
+        onClick={() => setView('menu')}
+        className="text-textMuted mt-4 underline decoration-textMuted/30 hover:text-white"
+      >
+        Geri Dön
+      </button>
+    </div>
+  );
+};
+
+const LeaderboardScreen = () => {
+  const { setView } = useUserStore();
+  const [leaders, setLeaders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<Difficulty>('progressive');
+
+  useEffect(() => {
+    const fetchLeaders = async () => {
+      setLoading(true);
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, orderBy(`scores.${activeTab}`, 'desc'), limit(10));
+        const querySnapshot = await getDocs(q);
+        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setLeaders(data);
+      } catch (error) {
+        console.error("Error fetching leaderboard", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaders();
+  }, [activeTab]);
+
+  return (
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button border border-white/5">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-3xl font-display font-black">Liderlik Tablosu</h2>
+      </div>
+
+      <div className="flex gap-2 w-full mb-4 overflow-x-auto pb-2 scrollbar-hide">
+         {[
+           { id: 'progressive', label: 'İlerlemeli' },
+           { id: 'easy', label: 'Kolay' },
+           { id: 'medium', label: 'Orta' },
+           { id: 'hard', label: 'Zor' }
+         ].map(tab => (
+           <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as Difficulty)}
+              className={clsx(
+                "px-4 py-2 font-bold font-display rounded-xl whitespace-nowrap transition-colors border border-white/5",
+                activeTab === tab.id ? "bg-primary text-white" : "bg-surface text-textMuted hover:bg-surfaceAlt"
+              )}
+           >
+              {tab.label}
+           </button>
+         ))}
+      </div>
+
+      <div className="bg-surface/50 border border-white/5 rounded-3xl p-2 h-full flex-1">
+        {loading ? (
+          <div className="p-8 text-center text-textMuted">Yükleniyor...</div>
+        ) : leaders.length === 0 ? (
+          <div className="p-8 text-center text-textMuted">Henüz kimse skor yapmadı!</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {leaders.map((u, i) => (
+              <div key={u.id} className="bg-surface p-4 rounded-2xl flex items-center justify-between border border-white/5">
+                <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                    i === 0 ? 'bg-yellow-500/20 text-yellow-500' :
+                    i === 1 ? 'bg-gray-400/20 text-gray-400' :
+                    i === 2 ? 'bg-orange-500/20 text-orange-500' : 'bg-white/5 text-textMuted'
+                  }`}>
+                    {i + 1}
+                  </div>
+                  <div>
+                    <h3 className="font-bold">{u.displayName || 'İsimsiz Oyuncu'}</h3>
+                    <p className="text-xs text-textMuted">Max Lvl: {u.levels?.[activeTab] || 1}</p>
+                  </div>
+                </div>
+                <div className="font-display font-black text-primary text-xl">
+                  {u.scores?.[activeTab] || 0}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ProfileScreen = () => {
+  const { user, logout, setView } = useUserStore();
+
+  if (!user) {
+    setView('menu');
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-3xl font-display font-black">Profilim</h2>
+      </div>
+
+      <div className="bg-surface border border-white/5 p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl mb-6">
+        {user.photoURL ? (
+          <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-surfaceAlt mb-4" />
+        ) : (
+          <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center mb-4">
+            <UserIcon className="w-12 h-12 text-primary" />
+          </div>
+        )}
+        
+        <input 
+          type="text" 
+          defaultValue={user.displayName || 'İsimsiz Oyuncu'}
+          onBlur={async (e) => {
+             const newName = e.target.value.trim();
+             if (newName && newName !== user.displayName) {
+                try {
+                  const { doc, updateDoc } = await import('firebase/firestore');
+                  const userRef = doc(db, 'users', user.uid);
+                  await updateDoc(userRef, { displayName: newName });
+                  useUserStore.setState({ user: { ...user, displayName: newName } });
+                } catch(error) {
+                  console.error(error);
+                }
+             }
+          }}
+          className="text-2xl font-bold font-display mb-1 bg-transparent border-b border-dashed border-textMuted/30 focus:border-primary text-center outline-none transition-colors w-full px-2 py-1"
+        />
+        <p className="text-textMuted text-sm mb-6 mt-1">{user.email}</p>
+
+        <div className="w-full grid grid-cols-2 gap-4">
+          <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
+            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Skor (İlerlemeli)</p>
+            <p className="text-2xl font-display font-black text-primary">{user.scores?.progressive || 0}</p>
+          </div>
+          <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
+            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Maks Seviye</p>
+            <p className="text-2xl font-display font-black text-white">{user.levels?.progressive || 1}</p>
+          </div>
+          <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
+            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Skor (Zor)</p>
+            <p className="text-2xl font-display font-black text-danger">{user.scores?.hard || 0}</p>
+          </div>
+           <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
+            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Maks Seviye</p>
+            <p className="text-2xl font-display font-black text-white">{user.levels?.hard || 1}</p>
+          </div>
+        </div>
+      </div>
+
+      <button 
+        onClick={async () => {
+          await logout();
+        }}
+        className="neo-button w-full py-4 bg-danger/10 text-danger border border-danger/20 font-bold rounded-2xl flex items-center justify-center gap-2"
+      >
+        <LogOut className="w-5 h-5" />
+        Çıkış Yap
+      </button>
+    </div>
+  );
+};
+
+const VictoryScreen = () => {
+  const { level, startLevel } = useGameStore();
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
+      <div className="bg-surface border border-white/10 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-2xl relative z-10 overflow-hidden">
+        <h2 className="text-6xl font-display font-black text-white mb-2">BÖLÜM {level}</h2>
+        <p className="text-primary font-bold tracking-[0.2em] mb-10 text-sm">TAMAMLANDI</p>
+
+        <button 
+          onClick={() => startLevel(level + 1)}
+          className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
+        >
+          <Play className="fill-current w-6 h-6" />
+          Sıradaki Hedef
+        </button>
+        <button 
+          onClick={() => useUserStore.getState().setView('menu')}
+          className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-white"
+        >
+          Ana Menüye Dön
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const GameScreen = () => {
+  const { level, gameMode, resetGrid, useHint, status } = useGameStore();
+  const { setView } = useUserStore();
+
+  if (status === 'won') return <VictoryScreen />;
+
+  return (
+    <div className="flex flex-col min-h-[100dvh] w-full max-w-md mx-auto relative z-10 animate-fade-in pt-safe pb-safe">
+      <header className="glass-header sticky top-0 z-20 flex items-center justify-between px-6 py-4">
+        <button 
+          onClick={() => setView('menu')} 
+          className="w-10 h-10 bg-surface rounded-xl flex items-center justify-center hover:bg-surfaceAlt border border-white/5 neo-button"
+        >
+          <ArrowLeft className="w-5 h-5 text-textMain" />
+        </button>
+        <div className="flex flex-col items-end">
+          <span className={clsx(
+            "font-bold tracking-[0.2em] text-[10px] uppercase opacity-80",
+            gameMode === 'online' ? 'text-primary' : 'text-textMuted'
+          )}>
+            {gameMode === 'online' ? 'Çevrimiçi Seri' : 'Çevrimdışı'}
+          </span>
+          <h1 className="text-2xl font-display font-black text-white">Bölüm {level}</h1>
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center justify-center -mt-6">
+        <Grid />
+      </main>
+
+      <footer className="p-6 flex gap-4 w-full">
+        <button onClick={useHint} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt">
+          <Lightbulb className="w-5 h-5 text-primary" />
+          <span className="font-display tracking-wide">İPUCU</span>
+        </button>
+        <button onClick={resetGrid} className="neo-button w-16 h-16 bg-surface text-danger shrink-0 rounded-[1.25rem] flex items-center justify-center border border-white/5 hover:bg-surfaceAlt">
+          <RotateCcw className="w-6 h-6" />
+        </button>
+      </footer>
+    </div>
+  );
+};
+
+export default function App() {
+  const { currentView, initializeAuth, loading } = useUserStore();
+  
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const button = target.closest('button');
+      // Play a thud sound for all buttons EXCEPT the grid cells (they have their own specific pop sounds)
+      if (button && !button.classList.contains('grid-cell')) {
+        playClick();
+      }
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => document.removeEventListener('mousedown', handleGlobalClick);
+  }, []);
+
+  if (loading) {
+    return <div className="min-h-screen bg-bgStart flex items-center justify-center text-primary font-display font-bold text-2xl animate-pulse">Yükleniyor...</div>;
+  }
+  
+  return (
+    <div className="w-full relative min-h-screen selection:bg-primary/30">
+      <div className="bg-ambient" />
+      {currentView === 'menu' && <MainMenu />}
+      {currentView === 'auth' && <AuthScreen />}
+      {currentView === 'game' && <GameScreen />}
+      {currentView === 'leaderboard' && <LeaderboardScreen />}
+      {currentView === 'profile' && <ProfileScreen />}
+    </div>
+  );
+}

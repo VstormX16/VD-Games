@@ -1,0 +1,219 @@
+import { create } from 'zustand';
+import type { CellData, GameMode, GridConfig, Difficulty } from '../types/game';
+import { generateGrid } from '../utils/gridGenerator';
+import { playPop, playUnpop, playError, playSuccess, triggerHapticPop, triggerHapticError, triggerHapticSuccess } from '../utils/audioHaptics';
+
+interface GameState {
+  level: number;
+  boardSize: number;
+  cells: CellData[][];
+  rowTargets: number[];
+  colTargets: number[];
+  gameMode: GameMode;
+  difficulty: Difficulty;
+  status: 'playing' | 'won' | 'lost';
+  
+  // Actions
+  toggleCell: (row: number, col: number) => void;
+  checkWinCondition: () => void;
+  startLevel: (levelNumber: number, mode?: GameMode, diff?: Difficulty) => void;
+  resetGrid: () => void;
+  useHint: () => void;
+}
+
+const getLevelConfig = (level: number, difficulty: Difficulty): GridConfig => {
+  if (difficulty === 'easy') {
+    return { size: 3, maxValue: 5, negativeChance: 0, lockChance: 0, unknownChance: 0 };
+  }
+  if (difficulty === 'medium') {
+    return { size: 5, maxValue: 9, negativeChance: 0.1, lockChance: 0, unknownChance: 0 };
+  }
+  if (difficulty === 'hard') {
+    return { size: 7, maxValue: 15, negativeChance: 0.2, lockChance: 0.15, unknownChance: 0.1 };
+  }
+
+  // Progressive difficulty
+  let size = 3;
+  let maxValue = 3;
+  let negativeChance = 0;
+  let lockChance = 0;
+  let unknownChance = 0;
+
+  // Grid Size Progression
+  if (level >= 3) size = 4;
+  if (level >= 8) size = 5;
+  if (level >= 15) size = 6;
+  if (level >= 25) size = 7;
+
+  // Max Value Progression
+  if (level === 2) maxValue = 5;
+  if (level >= 3) maxValue = 9;
+  if (level >= 10) maxValue = 12;
+  if (level >= 18) maxValue = 15;
+  if (level >= 30) maxValue = 20;
+
+  // Negative Chance Progression (Starts at roughly lvl 5)
+  if (level >= 5) {
+    negativeChance = Math.min(0.25, 0.05 + ((level - 5) * 0.01));
+  }
+  
+  // Lock Chance Progression (Starts at lvl 8)
+  if (level >= 8) {
+    lockChance = Math.min(0.15, 0.03 + ((level - 8) * 0.01));
+  }
+  
+  // Unknown Chance Progression (Question marks, starts at lvl 12)
+  if (level >= 12) {
+    unknownChance = Math.min(0.15, 0.03 + ((level - 12) * 0.01));
+  }
+
+  return {
+    size,
+    maxValue,
+    negativeChance,
+    lockChance,
+    unknownChance,
+  };
+};
+
+export const useGameStore = create<GameState>((set, get) => ({
+  level: 1,
+  boardSize: 3,
+  cells: [],
+  rowTargets: [],
+  colTargets: [],
+  gameMode: 'offline',
+  difficulty: 'progressive',
+  status: 'playing',
+
+  toggleCell: (row, col) => {
+    const { cells, status } = get();
+    if (status !== 'playing') return;
+
+    const cell = cells[row][col];
+    if (cell.type === 'locked') {
+      playError();
+      triggerHapticError();
+      return;
+    }
+
+    const newCells = cells.map(r => [...r]);
+    const newState = cell.state === 'active' ? 'passive' : 'active';
+    
+    newCells[row][col] = {
+      ...cell,
+      state: newState
+    };
+
+    // Audio & Haptic response
+    if (newState === 'active') {
+       playPop();
+       triggerHapticPop();
+    } else {
+       playUnpop();
+       triggerHapticPop();
+    }
+
+    set({ cells: newCells });
+    get().checkWinCondition();
+  },
+
+  checkWinCondition: () => {
+    const { cells, rowTargets, colTargets, boardSize } = get();
+    let isWon = true;
+
+    for (let r = 0; r < boardSize; r++) {
+      let rowSum = 0;
+      for (let c = 0; c < boardSize; c++) {
+        if (cells[r][c].state === 'active') {
+          rowSum += cells[r][c].value;
+        }
+      }
+      if (rowSum !== rowTargets[r]) isWon = false;
+    }
+
+    for (let c = 0; c < boardSize; c++) {
+      let colSum = 0;
+      for (let r = 0; r < boardSize; r++) {
+        if (cells[r][c].state === 'active') {
+          colSum += cells[r][c].value;
+        }
+      }
+      if (colSum !== colTargets[c]) isWon = false;
+    }
+
+    if (isWon) {
+      set({ status: 'won' });
+      playSuccess();
+      triggerHapticSuccess();
+      // Award 100 points * board size
+      const points = boardSize * 100;
+      // Get the useUserStore from outside
+      import('./userStore').then(module => {
+         const { useUserStore } = module;
+         const { user, updateScore } = useUserStore.getState();
+         if (get().gameMode === 'online' && user) {
+           updateScore(points, get().level, get().difficulty);
+         }
+      });
+    }
+  },
+
+  startLevel: (levelNumber, mode, diff) => {
+    const selectedDifficulty = diff || get().difficulty;
+    const config = getLevelConfig(levelNumber, selectedDifficulty);
+    const { cells, rowTargets, colTargets } = generateGrid(config);
+    
+    set({
+      level: levelNumber,
+      boardSize: config.size,
+      cells,
+      rowTargets,
+      colTargets,
+      status: 'playing',
+      difficulty: selectedDifficulty,
+      ...(mode && { gameMode: mode }),
+    });
+  },
+
+  resetGrid: () => {
+    const { cells } = get();
+    const resetCells = cells.map(row => 
+      row.map(cell => ({
+        ...cell,
+        state: cell.type === 'locked' ? cell.solutionState : 'passive' as const
+      }))
+    );
+    set({ cells: resetCells, status: 'playing' });
+  },
+
+  useHint: () => {
+    const { cells, status } = get();
+    if (status !== 'playing') return;
+
+    // Find a cell that is not in its solution state
+    const wrongCells: {r: number, c: number}[] = [];
+    cells.forEach((row, r) => {
+      row.forEach((cell, c) => {
+        if (cell.type !== 'locked' && cell.state !== cell.solutionState) {
+          wrongCells.push({r, c});
+        }
+      });
+    });
+
+    if (wrongCells.length > 0) {
+      const randomHint = wrongCells[Math.floor(Math.random() * wrongCells.length)];
+      const newCells = cells.map(r => [...r]);
+      const cell = newCells[randomHint.r][randomHint.c];
+      
+      newCells[randomHint.r][randomHint.c] = {
+        ...cell,
+        state: cell.solutionState,
+        type: 'locked' // Lock it so they can't mess it up
+      };
+
+      set({ cells: newCells });
+      get().checkWinCondition();
+    }
+  }
+}));
