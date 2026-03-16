@@ -573,12 +573,29 @@ const FriendsScreen = () => {
     }
   };
 
-  const handleChallenge = (_friendUid: string) => {
+  const handleChallenge = async (friendUidVal: string) => {
     playClick();
+    if (!user) return;
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-    useUserStore.setState({ matchmakingParams: { mode: 'create', roomCode: code } });
-    // We'll show the code so they can share it
-    setView('friend_duel');
+    // Create invitation in Firestore
+    try {
+      await setDoc(doc(db, 'invitations', `${user.uid}_${friendUidVal}`), {
+        fromUid: user.uid,
+        fromName: user.displayName || 'İsimsiz',
+        fromPhoto: user.photoURL || null,
+        toUid: friendUidVal,
+        roomCode: code,
+        status: 'pending',
+        createdAt: Date.now()
+      });
+      setAddSuccess('⚔️ Davet gönderildi! Arkadaşının kabul etmesini bekliyorsun...');
+      // Now the sender also waits - go to matchmaking as creator
+      useUserStore.setState({ matchmakingParams: { mode: 'create', roomCode: code } });
+      setView('matchmaking');
+    } catch (e) {
+      console.error(e);
+      setAddError('Davet gönderilemedi.');
+    }
   };
 
   const handleCopyUid = () => {
@@ -2572,6 +2589,117 @@ const GameScreen = () => {
     </div>
   );
 };
+// ---- Global Friend Invitation Toast ----
+const InvitationToast = () => {
+  const user = useUserStore(s => s.user);
+  const setView = useUserStore(s => s.setView);
+  const [invitation, setInvitation] = useState<{
+    id: string;
+    fromName: string;
+    fromPhoto: string | null;
+    roomCode: string;
+    fromUid: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, 'invitations'),
+      where('toUid', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const now = Date.now();
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        // Only show invitations less than 60s old
+        if (now - data.createdAt < 60000) {
+          setInvitation({
+            id: docSnap.id,
+            fromName: data.fromName,
+            fromPhoto: data.fromPhoto,
+            roomCode: data.roomCode,
+            fromUid: data.fromUid
+          });
+          return;
+        } else {
+          // Clean up expired invitation
+          deleteDoc(docSnap.ref).catch(() => {});
+        }
+      }
+      setInvitation(null);
+    });
+
+    return () => unsub();
+  }, [user?.uid]);
+
+  const handleAccept = async () => {
+    if (!invitation) return;
+    playSuccess();
+    // Delete the invitation
+    await deleteDoc(doc(db, 'invitations', invitation.id)).catch(() => {});
+    // Join the room
+    useUserStore.setState({ matchmakingParams: { mode: 'join', roomCode: invitation.roomCode } });
+    setInvitation(null);
+    setView('matchmaking');
+  };
+
+  const handleDecline = async () => {
+    if (!invitation) return;
+    playClick();
+    await deleteDoc(doc(db, 'invitations', invitation.id)).catch(() => {});
+    setInvitation(null);
+  };
+
+  return (
+    <AnimatePresence>
+      {invitation && (
+        <motion.div
+          initial={{ y: 200, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 200, opacity: 0 }}
+          transition={{ type: "spring", damping: 20, stiffness: 300 }}
+          className="fixed bottom-6 left-4 right-4 z-[300] flex justify-center pointer-events-none"
+        >
+          <div className="w-full max-w-md pointer-events-auto">
+            <div className="bg-surface/95 backdrop-blur-2xl border border-primary/30 rounded-[2rem] p-5 shadow-[0_20px_60px_rgba(168,85,247,0.3),0_0_0_1px_rgba(255,255,255,0.05)] flex items-center gap-4">
+              {/* Avatar */}
+              <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center border-2 border-primary/40 shrink-0 relative">
+                <Swords className="w-7 h-7 text-primary" />
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-surface animate-pulse" />
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-0.5">Düello Daveti</p>
+                <p className="font-display font-bold text-textMain text-lg truncate">{invitation.fromName}</p>
+                <p className="text-textMuted text-xs">seni 1v1 düelloya davet ediyor!</p>
+              </div>
+              {/* Actions */}
+              <div className="flex gap-2 shrink-0">
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={handleDecline}
+                  className="w-12 h-12 rounded-xl bg-danger/10 text-danger border border-danger/20 flex items-center justify-center hover:bg-danger/20 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={handleAccept}
+                  className="w-12 h-12 rounded-xl bg-primary text-white flex items-center justify-center shadow-[0_5px_15px_rgba(168,85,247,0.4)] hover:bg-primary/90 transition-colors"
+                >
+                  <Check className="w-5 h-5" />
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 export default function App() {
   const { currentView, initializeAuth, loading, user } = useUserStore();
@@ -2629,6 +2757,7 @@ export default function App() {
       <div className="bg-ambient" />
       <SeasonRewardOverlay />
       <RankUpOverlay />
+      <InvitationToast />
       
       <AnimatePresence mode="wait">
         <motion.div
