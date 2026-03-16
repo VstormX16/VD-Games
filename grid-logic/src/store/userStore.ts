@@ -4,14 +4,18 @@ import { auth, db, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { getCurrentSeason } from '../utils/season';
+import { getLeagueInfo, type RankInfo } from '../utils/rank';
 
 interface UserState {
   user: UserProfile | null;
   loading: boolean;
   currentView: AppView;
+  rankUpData: { previous: RankInfo; current: RankInfo } | null;
+  matchmakingParams: { mode: 'public' | 'create' | 'join', roomCode?: string } | null;
   
   // Actions
   setView: (view: AppView) => void;
+  clearRankUpData: () => void;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateScore: (points: number, levelInfo: number, difficulty: import('../types/game').Difficulty) => Promise<void>;
@@ -25,6 +29,7 @@ interface UserState {
   incrementPlaytime: (seconds: number) => void;
   updateQuestProgress: (action: import('../data/quests').QuestAction) => Promise<void>;
   claimQuestReward: (questId: string, isWeekly: boolean, reward: number) => Promise<void>;
+  claimSeasonReward: () => Promise<boolean>;
   initializeAuth: () => void;
 }
 
@@ -32,8 +37,11 @@ export const useUserStore = create<UserState>((set, get) => ({
   user: null,
   loading: true,
   currentView: 'menu',
+  rankUpData: null,
+  matchmakingParams: null,
 
   setView: (view) => set({ currentView: view }),
+  clearRankUpData: () => set({ rankUpData: null }),
 
   signInWithGoogle: async () => {
     try {
@@ -140,11 +148,20 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (!user) return;
     
     // Trophies cannot be less than 0
+    const oldSeasonTrophies = user.seasonTrophies || 0;
     const newTrophies = Math.max(0, (user.trophies || 0) + amount);
-    const newSeasonTrophies = Math.max(0, (user.seasonTrophies || 0) + amount);
+    const newSeasonTrophies = Math.max(0, oldSeasonTrophies + amount);
     const currentSeason = getCurrentSeason();
     
-    set({ user: { ...user, trophies: newTrophies, seasonTrophies: newSeasonTrophies, seasonId: currentSeason.id } });
+    // Check rank up
+    const oldLeague = getLeagueInfo(oldSeasonTrophies);
+    const newLeague = getLeagueInfo(newSeasonTrophies);
+    let rankUpData = get().rankUpData;
+    if (newLeague.min > oldLeague.min) {
+        rankUpData = { previous: oldLeague, current: newLeague };
+    }
+    
+    set({ user: { ...user, trophies: newTrophies, seasonTrophies: newSeasonTrophies, seasonId: currentSeason.id }, rankUpData });
     
     try {
       const userRef = doc(db, 'users', user.uid);
@@ -173,9 +190,9 @@ export const useUserStore = create<UserState>((set, get) => ({
     const { user } = get();
     if (!user || user.coins < cost) return false;
     
-    // Check if already owned
+    // Check if already owned (except consumables)
     const inventory = user.inventory || [];
-    if (inventory.includes(itemId)) return false;
+    if (itemId !== 'streak_freeze' && inventory.includes(itemId)) return false;
 
     const newCoins = user.coins - cost;
     const newInventory = [...inventory, itemId];
@@ -228,18 +245,30 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (user.lastLoginDate === today) return 0; // Already claimed
 
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    const newStreak = user.lastLoginDate === yesterday ? (user.loginStreak || 0) + 1 : 1;
+    const twoDaysAgo = new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0];
+    
+    let newStreak = 1;
+    let newInventory = user.inventory || [];
+
+    if (user.lastLoginDate === yesterday) {
+      newStreak = (user.loginStreak || 0) + 1;
+    } else if (user.lastLoginDate === twoDaysAgo && newInventory.includes('streak_freeze')) {
+      newStreak = (user.loginStreak || 0) + 1;
+      newInventory = newInventory.filter(i => i !== 'streak_freeze'); // Tükemini sağla
+    } else {
+      newStreak = 1;
+    }
     
     // Base reward = 50 coins + 10 per streak (up to 200)
     const reward = Math.min(200, 50 + newStreak * 10);
     const newCoins = (user.coins || 0) + reward;
 
-    const updatedUser = { ...user, coins: newCoins, lastLoginDate: today, loginStreak: newStreak };
+    const updatedUser = { ...user, coins: newCoins, lastLoginDate: today, loginStreak: newStreak, inventory: newInventory };
     set({ user: updatedUser });
 
     try {
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { coins: newCoins, lastLoginDate: today, loginStreak: newStreak });
+      await updateDoc(userRef, { coins: newCoins, lastLoginDate: today, loginStreak: newStreak, inventory: newInventory });
     } catch (e) {
       console.error(e);
     }
@@ -372,9 +401,34 @@ export const useUserStore = create<UserState>((set, get) => ({
        const newCoins = (user.coins || 0) + reward;
        const updated = { ...user, coins: newCoins, dailyQuestsProgress: progress };
        set({ user: updated });
-       try {
-         await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, dailyQuestsProgress: progress });
-       } catch (e) { console.error(e); }
+        try {
+          await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, dailyQuestsProgress: progress });
+        } catch (e) { console.error(e); }
+     }
+  },
+
+  claimSeasonReward: async () => {
+    const { user } = get();
+    if (!user || !user.pendingSeasonReward) return false;
+    
+    const newCoins = (user.coins || 0) + user.pendingSeasonReward.coins;
+    
+    // Create new object without pendingSeasonReward
+    const updatedUser = { ...user, coins: newCoins, pendingSeasonReward: null };
+    
+    const rankUpData = get().rankUpData;
+    set({ user: updatedUser, rankUpData });
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { 
+         coins: newCoins, 
+         pendingSeasonReward: null
+      });
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
     }
   },
 
@@ -399,16 +453,34 @@ export const useUserStore = create<UserState>((set, get) => ({
 
           const currentSeason = getCurrentSeason();
           let needsUpdate = false;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const updateData: any = {};
+
           if (ud.seasonId !== currentSeason.id) {
+             const oldSeasonTrophies = ud.seasonTrophies || 0;
+             if (oldSeasonTrophies > 0) {
+                 const oldLeagueInfo = getLeagueInfo(oldSeasonTrophies);
+                 if (oldLeagueInfo.seasonReward && oldLeagueInfo.seasonReward > 0) {
+                     ud.pendingSeasonReward = {
+                         rankName: oldLeagueInfo.name,
+                         coins: oldLeagueInfo.seasonReward
+                     };
+                     updateData.pendingSeasonReward = ud.pendingSeasonReward;
+                 }
+             }
+
              ud.seasonId = currentSeason.id;
              ud.seasonTrophies = 0; // Reset season trophies
+             updateData.seasonId = currentSeason.id;
+             updateData.seasonTrophies = 0;
              needsUpdate = true;
           }
 
-          set({ user: ud, loading: false });
+          const rankUpData = get().rankUpData;
+          set({ user: ud, loading: false, rankUpData });
           
           if (needsUpdate) {
-             updateDoc(userRef, { seasonId: currentSeason.id, seasonTrophies: 0 }).catch(console.error);
+             updateDoc(userRef, updateData).catch(console.error);
           }
         } else {
           set({ user: null, loading: false }); // Failsafe

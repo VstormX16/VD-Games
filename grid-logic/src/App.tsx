@@ -18,35 +18,9 @@ import { useTranslation } from './utils/i18n';
 import { BottomNav } from './components/BottomNav';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getDailyQuests, getWeeklyQuests } from './data/quests';
-
-// We redefine tiers to include Platinum, Yücelik (Immortal), Radyant (Radiant)
-const RANK_THRESHOLDS = [
-  { name: 'Radyant', min: 5000, max: 99999, color: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/30', glow: 'shadow-[0_0_25px_rgba(252,211,77,0.6)]', icon: Crown },
-  { name: 'Immortal', min: 3000, max: 5000, color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/30', glow: 'shadow-[0_0_20px_rgba(244,63,94,0.5)]', icon: Crown },
-  { name: 'Yücelik', min: 1500, max: 3000, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30', glow: 'shadow-[0_0_20px_rgba(168,85,247,0.5)]', icon: Crown },
-  { name: 'Elmas', min: 1000, max: 1500, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', glow: 'shadow-[0_0_15px_rgba(34,211,238,0.3)]', icon: Shield },
-  { name: 'Platin', min: 600, max: 1000, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30', glow: 'shadow-[0_0_15px_rgba(45,212,191,0.3)]', icon: Shield },
-  { name: 'Altın', min: 300, max: 600, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', glow: 'shadow-[0_0_15px_rgba(250,204,21,0.3)]', icon: Star },
-  { name: 'Gümüş', min: 100, max: 300, color: 'text-gray-300', bg: 'bg-gray-400/10', border: 'border-gray-400/30', glow: 'shadow-[0_0_10px_rgba(209,213,219,0.2)]', icon: Shield },
-  { name: 'Bronz', min: 0, max: 100, color: 'text-orange-700', bg: 'bg-orange-900/10', border: 'border-orange-900/30', glow: '', icon: Shield }
-];
-
-const getLeagueInfo = (trophies: number) => {
-  const currentRankIndex = RANK_THRESHOLDS.findIndex(r => trophies >= r.min);
-  const rankInfo = currentRankIndex !== -1 ? RANK_THRESHOLDS[currentRankIndex] : RANK_THRESHOLDS[RANK_THRESHOLDS.length - 1];
-  
-  // Calculate progress to next rank
-  let progressPercentage = 100;
-  if (currentRankIndex > 0) {
-     const currentLevelMin = rankInfo.min;
-     const nextLevelMin = RANK_THRESHOLDS[currentRankIndex - 1].min;
-     const pointsInLevel = trophies - currentLevelMin;
-     const pointsRequired = nextLevelMin - currentLevelMin;
-     progressPercentage = Math.min(100, Math.max(0, (pointsInLevel / pointsRequired) * 100));
-  }
-
-  return { ...rankInfo, progressPercentage };
-};
+import { getLeagueInfo } from './utils/rank';
+import { RankUpOverlay } from './components/RankUpOverlay';
+import { SeasonRewardOverlay } from './components/SeasonRewardOverlay';
 
 const MainMenu = () => {
   const { startLevel } = useGameStore();
@@ -123,13 +97,10 @@ const MainMenu = () => {
           <motion.div 
             animate={{ y: [0, -10, 0] }} 
             transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-            className="relative mb-6 group"
+            className="relative mb-6 group flex justify-center items-center"
           >
-            <div className="absolute inset-0 bg-primary opacity-20 blur-xl rounded-full scale-150 transition-transform group-hover:scale-125 duration-1000" />
-            <div className="w-24 h-24 bg-surface rounded-[2rem] border border-white/10 flex items-center justify-center shadow-2xl relative z-10 rotate-3">
-              <img src="/logo.svg" alt="VD-Games Logo" className="w-16 h-16 object-contain -rotate-3 drop-shadow-lg" />
-              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/20 to-transparent rounded-b-[2rem]" />
-            </div>
+            <div className="absolute inset-0 bg-primary opacity-20 blur-2xl rounded-full scale-[1.5] transition-transform group-hover:scale-[1.8] duration-1000 -z-10" />
+            <img src="/logo.svg" alt="VD-Games Logo" className="w-28 h-28 object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-transform group-hover:scale-105 duration-300" />
           </motion.div>
 
           <h1 className="text-5xl font-display font-black mb-2 tracking-tight drop-shadow-md">
@@ -155,6 +126,7 @@ const MainMenu = () => {
             onClick={() => {
               if (user) {
                 playClick();
+                useUserStore.setState({ matchmakingParams: { mode: 'public' } });
                 setView('matchmaking');
               } else {
                 setView('auth');
@@ -164,6 +136,22 @@ const MainMenu = () => {
           >
             <Swords className="w-6 h-6" />
             1v1 Düello
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (user) {
+                playClick();
+                setView('friend_duel');
+              } else {
+                setView('auth');
+              }
+            }}
+            className="neo-button w-full py-4 bg-purple-500/10 text-purple-400 font-display font-bold text-sm rounded-2xl border border-purple-500/20 flex items-center justify-center gap-2"
+          >
+            <UserIcon className="w-5 h-5" />
+            Arkadaşınla Oyna
           </motion.button>
 
           <motion.button
@@ -235,14 +223,15 @@ const MainMenu = () => {
 };
 
 const MatchmakingScreen = () => {
-  const { setView, user } = useUserStore();
+  const { setView, user, matchmakingParams } = useUserStore();
   const { startDuello } = useGameStore();
-  const [status, setStatus] = useState<string>('Rakip Aranıyor...');
+  const [status, setStatus] = useState<string>('Eşleştirme Başlatılıyor...');
 
   const userUid = user?.uid;
   const userDisplayName = user?.displayName;
 
   useEffect(() => {
+    console.log("Matchmaking effect triggered with:", matchmakingParams);
     if (!userUid) {
       setView('menu');
       return;
@@ -254,22 +243,74 @@ const MatchmakingScreen = () => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let pingInterval: ReturnType<typeof setInterval> | null = null;
 
+    console.log("Matchmaking effect started with:", matchmakingParams);
+
     const findOrCreateMatch = async () => {
       try {
-        // 1. Cleanup old matches in the background (fire and forget)
-        const cleanupOldMatches = async () => {
-          try {
-            const finishedQuery = query(collection(db, 'matches'), where('status', '==', 'finished'), limit(5));
-            const cancelledQuery = query(collection(db, 'matches'), where('status', '==', 'cancelled'), limit(5));
-            const [finishedSnap, cancelledSnap] = await Promise.all([getDocs(finishedQuery), getDocs(cancelledQuery)]);
+        if (matchmakingParams?.mode === 'join' && matchmakingParams.roomCode) {
+          const cleanCode = matchmakingParams.roomCode.trim().toUpperCase();
+          currentMatchId = `friend_${cleanCode}`;
+          console.log("Searching for room:", currentMatchId);
+          const matchRef = doc(db, 'matches', currentMatchId);
+          
+          let snap = null;
+          let retries = 0;
+          const maxRetries = 10;
+          
+          while (retries < maxRetries) {
+            snap = await getDoc(matchRef);
+            if (snap.exists() && snap.data().status === 'waiting') break;
             
-            finishedSnap.forEach(d => deleteDoc(doc(db, 'matches', d.id)).catch(() => {}));
-            cancelledSnap.forEach(d => deleteDoc(doc(db, 'matches', d.id)).catch(() => {}));
-          } catch {
-            // Ignore if security rules block it or it fails
+            console.log(`Room not ready yet, retry ${retries + 1}/${maxRetries}...`);
+            setStatus(`Oda Aranıyor (${retries + 1})...`);
+            await new Promise(r => setTimeout(r, 800));
+            retries++;
           }
-        };
-        cleanupOldMatches();
+          
+          if (!snap || !snap.exists() || snap.data().status !== 'waiting') {
+             console.error("Room join failed:", currentMatchId, snap?.exists() ? snap.data() : "not found");
+             setStatus('Oda Bulunamadı veya Dolu.');
+             setTimeout(() => setView('friend_duel'), 2500);
+             return;
+          }
+
+          await updateDoc(matchRef, {
+            player2: { 
+              uid: userUid, 
+              displayName: userDisplayName || 'Oyuncu',
+              photoURL: user.photoURL || null,
+              frame: user.equipped?.frame || null
+            },
+            status: 'playing'
+          });
+          setStatus('Odaya Girildi! Başlıyor...');
+        } else if (matchmakingParams?.mode === 'create' && matchmakingParams.roomCode) {
+          const cleanCode = matchmakingParams.roomCode.trim().toUpperCase();
+          currentMatchId = `friend_${cleanCode}`;
+          console.log("Creating private room:", currentMatchId);
+          await setDoc(doc(db, 'matches', currentMatchId), {
+            status: 'waiting',
+            isPrivate: true,
+            roomCode: cleanCode,
+            seed: currentMatchId,
+            player1: { 
+              uid: userUid, 
+              displayName: userDisplayName || 'Oyuncu',
+              photoURL: user.photoURL || null,
+              frame: user.equipped?.frame || null
+            },
+            createdAt: Date.now()
+          });
+          setStatus(`Oda Kuruldu: ${cleanCode}`);
+
+          pingInterval = setInterval(() => {
+             if (currentMatchId && !hasStartedGame) {
+                updateDoc(doc(db, 'matches', currentMatchId), { createdAt: Date.now() }).catch(() => {});
+             }
+          }, 15000); 
+        } else {
+          // Public Matchmaking
+          setStatus('Halk Açık Rakip Aranıyor...');
 
         // 2. Query for waiting match (fetch multiple and filter JS to avoid index mismatch and clear zombies)
         const q = query(collection(db, 'matches'), where('status', '==', 'waiting'), limit(20));
@@ -280,9 +321,10 @@ const MatchmakingScreen = () => {
 
         for (const docSnap of snapshot.docs) {
            const data = docSnap.data();
-           const isMe = data.player1?.uid === userUid;
-           
-           let timestamp = data.createdAt;
+            const isMe = data.player1?.uid === userUid;
+            const isPrivate = data.isPrivate === true;
+            
+            let timestamp = data.createdAt;
            if (!timestamp && docSnap.id.includes('_')) {
                timestamp = parseInt(docSnap.id.split('_')[0], 10);
            }
@@ -293,37 +335,48 @@ const MatchmakingScreen = () => {
            if (isOld) {
                // Cleanup zombie
                deleteDoc(doc(db, 'matches', docSnap.id)).catch(() => {});
-           } else if (!isMe && !validMatchDoc) {
+           } else if (!isMe && !isPrivate && !validMatchDoc) {
                validMatchDoc = docSnap;
            }
         }
 
-        if (validMatchDoc) {
-          // Match found! Join it.
-          currentMatchId = validMatchDoc.id;
-          
-          await updateDoc(doc(db, 'matches', currentMatchId), {
-            player2: { uid: userUid, displayName: userDisplayName || 'Oyuncu' },
-            status: 'playing'
-          });
-          setStatus(`Rakip Bulundu! Başlıyor...`);
-        } else {
-          // Create new match
-          currentMatchId = `${Date.now()}_${user.uid}`;
-          
-          // Setup match data with a random seed based on time
-          await setDoc(doc(db, 'matches', currentMatchId), {
-            status: 'waiting',
-            seed: currentMatchId, // Good enough random seed
-            player1: { uid: userUid, displayName: userDisplayName || 'Oyuncu' },
-            createdAt: Date.now()
-          });
+          if (validMatchDoc) {
+            // Match found! Join it.
+            currentMatchId = validMatchDoc.id;
+            
+            await updateDoc(doc(db, 'matches', currentMatchId), {
+              player2: { 
+                uid: userUid, 
+                displayName: userDisplayName || 'Oyuncu',
+                photoURL: user.photoURL || null,
+                frame: user.equipped?.frame || null
+              },
+              status: 'playing'
+            });
+            setStatus(`Rakip Bulundu! Başlıyor...`);
+          } else {
+            // Create new match
+            currentMatchId = `${Date.now()}_${user.uid}`;
+            
+            // Setup match data with a random seed based on time
+            await setDoc(doc(db, 'matches', currentMatchId), {
+              status: 'waiting',
+              seed: currentMatchId, // Good enough random seed
+              player1: { 
+                uid: userUid, 
+                displayName: userDisplayName || 'Oyuncu',
+                photoURL: user.photoURL || null,
+                frame: user.equipped?.frame || null
+              },
+              createdAt: Date.now()
+            });
 
-          pingInterval = setInterval(() => {
-             if (currentMatchId && !hasStartedGame) {
-                updateDoc(doc(db, 'matches', currentMatchId), { createdAt: Date.now() }).catch(() => {});
-             }
-          }, 15000); // keep alive
+            pingInterval = setInterval(() => {
+               if (currentMatchId && !hasStartedGame) {
+                  updateDoc(doc(db, 'matches', currentMatchId), { createdAt: Date.now() }).catch(() => {});
+               }
+            }, 15000);
+          }
         }
 
         // 3. Listen to the match for updates
@@ -334,14 +387,19 @@ const MatchmakingScreen = () => {
             setStatus('Maç Başlıyor!');
             // Identify opponent
             const opponentName = data.player1.uid === userUid ? data.player2?.displayName : data.player1.displayName;
+            const opponentUid = data.player1.uid === userUid ? data.player2?.uid : data.player1.uid;
+            const opponentPhotoURL = data.player1.uid === userUid ? data.player2?.photoURL : data.player1.photoURL;
+            const opponentFrame = data.player1.uid === userUid ? data.player2?.frame : data.player1.frame;
             
             // Small delay for dramatic effect, but only queue it ONCE
             if (!timeoutId) {
               timeoutId = setTimeout(() => {
                 hasStartedGame = true;
                 initAudio();
-                startDuello(snap.id, opponentName || 'Rakip', data.seed);
-                setView('game');
+                // Clear params ONLY when we are SURE we are starting
+                useUserStore.setState({ matchmakingParams: null });
+                startDuello(snap.id, opponentName || 'Rakip', data.seed, opponentUid, opponentPhotoURL, opponentFrame);
+                setView('vs_screen');
               }, 1500);
             }
           }
@@ -362,12 +420,15 @@ const MatchmakingScreen = () => {
       if (currentMatchId && !hasStartedGame) {
         getDoc(doc(db, 'matches', currentMatchId)).then((snap) => {
            if (snap.exists() && snap.data().status === 'waiting' && snap.data().player1.uid === userUid) {
-             updateDoc(doc(db, 'matches', currentMatchId), { status: 'cancelled' });
+             // Only cancel public matches automatically on unmount to prevent friend duels from breaking
+             if (!snap.data().isPrivate) {
+                updateDoc(doc(db, 'matches', currentMatchId), { status: 'cancelled' });
+             }
            }
         });
       }
     };
-  }, [userUid, userDisplayName, setView, startDuello, user?.uid]);
+  }, [userUid, userDisplayName, setView, startDuello, user?.uid, matchmakingParams]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-textMain">
@@ -388,6 +449,80 @@ const MatchmakingScreen = () => {
   );
 };
 
+const FriendDuelScreen = () => {
+  const setView = useUserStore(s => s.setView);
+  const [code, setCode] = useState('');
+
+  const handleCreate = () => {
+    const newCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    console.log("Generated code:", newCode);
+    playClick();
+    useUserStore.setState({ matchmakingParams: { mode: 'create', roomCode: newCode } });
+    setView('matchmaking');
+  };
+
+  const handleJoin = () => {
+    if (code.length < 4) return;
+    console.log("Joining with code:", code);
+    playClick();
+    useUserStore.setState({ matchmakingParams: { mode: 'join', roomCode: code.toUpperCase() } });
+    setView('matchmaking');
+  };
+
+  return (
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-textMain">
+      <div className="flex items-center gap-4 mb-12">
+        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt border border-white/5 neo-button shrink-0">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-3xl font-display font-black text-white">Arkadaş Düellosu</h2>
+      </div>
+
+      <div className="space-y-12 flex-1 flex flex-col justify-center">
+        <div className="bg-surface/50 border border-white/5 p-8 rounded-[2.5rem] shadow-xl text-center">
+           <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-primary/30">
+              <Sword className="w-8 h-8 text-primary" />
+           </div>
+           <h3 className="text-xl font-display font-bold mb-4">Oda Oluştur</h3>
+           <p className="text-textMuted text-sm mb-6 px-4">Bir oda kur ve gelen kodu arkadaşına gönder.</p>
+           <button 
+             onClick={handleCreate}
+             className="neo-button w-full py-5 bg-primary text-black font-display font-black text-xl rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)]"
+           >
+             ODA KUR
+           </button>
+        </div>
+
+        <div className="flex items-center gap-4 py-2">
+           <div className="flex-1 h-px bg-white/10" />
+           <span className="text-textMuted font-bold text-xs uppercase tracking-widest">VEYA</span>
+           <div className="flex-1 h-px bg-white/10" />
+        </div>
+
+        <div className="bg-surface/50 border border-white/10 p-8 rounded-[2.5rem] shadow-xl">
+           <h3 className="text-xl font-display font-bold mb-6 text-center">Odaya Katıl</h3>
+           <div className="relative mb-6">
+              <input 
+                type="text" 
+                maxLength={4}
+                placeholder="ODA KODU"
+                value={code}
+                onChange={(e) => setCode(e.target.value.trim().toUpperCase())}
+                className="w-full bg-bgStart border-2 border-white/10 rounded-2xl py-5 px-6 text-center text-3xl font-black font-mono tracking-[0.5em] focus:border-primary outline-none text-white uppercase placeholder:text-white/10"
+              />
+           </div>
+           <button 
+             onClick={handleJoin}
+             disabled={code.length < 4}
+             className="neo-button w-full py-5 bg-surfaceAlt text-textMain font-display font-black text-xl rounded-2xl border border-white/10 disabled:opacity-50"
+           >
+             KATIL
+           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const AuthScreen = () => {
   const { signInWithGoogle, setView, loading } = useUserStore();
 
@@ -659,6 +794,16 @@ const ShopScreen = () => {
     "p8q-PhpcmDk"
   ];
 
+  // Daily Emoji Logic
+  const today = new Date().toISOString().split('T')[0];
+  let seedVal = 0;
+  for (let i = 0; i < today.length; i++) {
+     seedVal += today.charCodeAt(i);
+  }
+  const premiumEmotes = ['😂', '🤬', '😭', '😎', '💀', '🔥'];
+  const dailyEmoteEmoji = premiumEmotes[seedVal % premiumEmotes.length];
+  const dailyEmoteId = `emote_${dailyEmoteEmoji}`;
+
   useEffect(() => {
      let timer: ReturnType<typeof setInterval>;
      if (showVideoOverlay && !canCloseAd) {
@@ -817,8 +962,71 @@ const ShopScreen = () => {
         </div>
 
         <div>
+          <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-4 px-2">Güçlendiriciler</h3>
+          <div className="space-y-4 relative mb-8">
+            {/* Seri Kurtarıcı */}
+            <div className="bg-surface p-4 rounded-3xl border border-cyan-500/20 flex items-center shadow-lg gap-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none -translate-y-1/2 translate-x-1/2" />
+              <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 shrink-0 flex items-center justify-center border border-cyan-500/30 text-3xl shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                ❄️
+              </div>
+              <div className="flex-1 relative z-10">
+                <h3 className="font-display font-bold text-lg text-textMain">Seri Dondurucu</h3>
+                <p className="text-cyan-100/60 text-[10px] leading-tight mt-0.5">Eğer dün girmeyi unuttuysan (1 gün geciktiysen) giriş serinin sıfırlanmasını senin yerine engeller.</p>
+                {user.inventory?.includes('streak_freeze') && (
+                  <div className="text-cyan-400 font-bold text-[10px] mt-1.5 flex items-center gap-1 bg-cyan-500/10 w-fit px-2 py-0.5 rounded-full border border-cyan-500/20">
+                    🔥 KORUMADA (Sahip olduğun: {user.inventory.filter(i => i === 'streak_freeze').length})
+                  </div>
+                )}
+              </div>
+              
+              <button 
+                onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('streak_freeze', 1000);
+                   if (success) playSuccess();
+                   else playError();
+                }} 
+                className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24 shrink-0 relative z-10"
+              >
+                <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+                <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 1000</span>
+              </button>
+            </div>
+          </div>
+
           <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-4 px-2">Kozmetikler (Oyun İçi Altın)</h3>
           <div className="space-y-4 relative">
+
+            {/* Daily Emoji */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center shadow-lg blur-0 gap-4">
+              <div className="absolute -top-6 -left-2 rotate-[-10deg] z-10 w-fit">
+                 <div className="bg-purple-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(168,85,247,0.5)] border border-white/20 animate-pulse">GÜNLÜK FIRSAT</div>
+              </div>
+              <div className="w-16 h-16 rounded-2xl bg-purple-500/20 shrink-0 flex items-center justify-center border border-purple-500/30 text-3xl">
+                {dailyEmoteEmoji}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display font-bold text-lg text-textMain">Özel Emoji</h3>
+                <p className="text-textMuted text-xs">Düelloda kullanmak için aç.</p>
+              </div>
+              
+              {!user.inventory?.includes(dailyEmoteId) ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem(dailyEmoteId, 500);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24 shrink-0">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 500</span>
+                 </button>
+              ) : (
+                <button disabled className={`neo-button px-4 py-3 bg-surfaceAlt text-textMain/50 border-white/10 font-bold rounded-xl border flex flex-col items-center justify-center gap-1 w-24 shrink-0`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">Sahipsin</span>
+                </button>
+              )}
+            </div>
             
             {/* Theme: Neon Mavi */}
             <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
@@ -1162,12 +1370,12 @@ const ProfileScreen = () => {
         <div className="w-full mb-6 flex flex-col items-center">
            <div className="flex justify-between w-full text-xs font-bold mb-1 px-1">
               <span className={league.color}>{league.name}</span>
-              <span className="text-textMuted">{Math.floor(league.progressPercentage)}%</span>
+              <span className="text-textMuted">{Math.floor(league.progressPercentage || 0)}%</span>
            </div>
            <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden shadow-inner relative border border-white/5">
               <motion.div 
                  initial={{ width: 0 }}
-                 animate={{ width: `${league.progressPercentage}%` }}
+                 animate={{ width: `${league.progressPercentage || 0}%` }}
                  transition={{ duration: 1, ease: "easeOut" }}
                  className={clsx("h-full rounded-full bg-current", league.color)}
               />
@@ -1264,15 +1472,24 @@ const QuestsScreen = () => {
   }
 
   const today = new Date().toISOString().split('T')[0];
+  const twoDaysAgo = new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0];
+  const hasFreeze = user.inventory?.includes('streak_freeze');
+
   const weekStart = (() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay());
     return d.toISOString().split('T')[0];
   })();
 
-  const canClaimLogin = user.lastLoginDate !== today;
   const loginStreak = user.loginStreak || 0;
-  const nextLoginReward = Math.min(200, 50 + (loginStreak + 1) * 10);
+  const canClaimLogin = user.lastLoginDate !== today;
+
+  // If they missed exactly yesterday and don't have a freeze, they can save it. If they miss >2 days, they permanently lose it.
+  const canSaveBrokenStreak = user.lastLoginDate === twoDaysAgo && !hasFreeze && loginStreak > 0;
+  const isPermanentlyLost = user.lastLoginDate && user.lastLoginDate < twoDaysAgo;
+
+  const virtualStreak = (isPermanentlyLost || canSaveBrokenStreak) ? 0 : loginStreak;
+  const nextLoginReward = Math.min(200, 50 + (virtualStreak + 1) * 10);
 
   const totalPlaytime = user.playtimeSeconds || 0;
   const lastClaimed = user.playtimeRewardClaimed || 0;
@@ -1318,37 +1535,78 @@ const QuestsScreen = () => {
         <h2 className="text-3xl font-display font-black">Görevler</h2>
       </div>
 
-      {/* Daily Login Reward */}
-      <div className="mb-6">
-        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Günlük Giriş Ödülü</h3>
-        <div className={`bg-gradient-to-br from-orange-500/20 to-orange-900/5 border ${canClaimLogin ? 'border-orange-500/40' : 'border-white/5'} p-5 rounded-[2rem] flex items-center justify-between gap-4 shadow-lg`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${canClaimLogin ? 'bg-orange-500/30' : 'bg-white/5'}`}>
-              <Flame className={`w-7 h-7 ${canClaimLogin ? 'text-orange-400' : 'text-textMuted'}`} />
+      {/* Daily Login Reward & Dualingo Streak */}
+      <div className="mb-6 relative">
+        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Ödüllü Giriş Serisi</h3>
+        
+        {/* Dualingo Style Streak Visualization */}
+        <div className="bg-surface border border-white/5 rounded-[2rem] p-6 shadow-xl relative overflow-hidden flex flex-col items-center">
+            {/* Background Glow */}
+            <div className={`absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3`} />
+            
+            <div className="flex flex-col items-center mb-6 relative z-10">
+               <div className="relative">
+                  <Flame className="w-20 h-20 text-orange-500 drop-shadow-[0_0_20px_rgba(249,115,22,0.8)]" />
+                  <div className="absolute inset-0 flex items-center justify-center font-black text-2xl text-white mt-10">
+                     {loginStreak}
+                  </div>
+               </div>
+               <h3 className="font-display font-black text-2xl text-textMain mt-2">Günlük Seri</h3>
+               <p className="text-textMuted text-xs mt-1 max-w-[200px] text-center">
+                  Her gün aralıksız girmeye devam et, kazanacağın ödüller katlanarak büyüsün!
+               </p>
             </div>
-            <div>
-              <p className="font-bold text-textMain">Giriş #{loginStreak + (canClaimLogin ? 1 : 0)}</p>
-              <p className="text-textMuted text-xs">
-                {canClaimLogin ? `+${nextLoginReward} altın kazanacaksın` : 'Bugün zaten toplandı'}
-              </p>
-              {loginStreak > 0 && (
-                <p className="text-orange-400 text-[10px] font-bold mt-0.5">🔥 {loginStreak} günlük seri</p>
+
+            {/* Claim Reward Banner */}
+            <div className={`w-full bg-gradient-to-br from-orange-500/20 to-orange-900/5 border ${canSaveBrokenStreak ? 'border-danger/50' : canClaimLogin ? 'border-orange-500/40' : 'border-white/5'} p-4 rounded-[1.5rem] flex items-center justify-between gap-4 shadow-lg backdrop-blur-sm z-10`}>
+              <div className="flex-1 min-w-0">
+                {canSaveBrokenStreak ? (
+                   <>
+                     <p className="font-bold text-danger text-sm">Serin Kırıldı!</p>
+                     <p className="text-danger/80 text-[11px] font-medium truncate mt-0.5">Sıfırlanmaması için dondurucu al!</p>
+                   </>
+                ) : (
+                   <>
+                     <p className="font-bold text-textMain text-sm">Giriş #{virtualStreak + (canClaimLogin ? 1 : 0)}</p>
+                     <p className="text-orange-300 text-[11px] font-medium truncate mt-0.5">
+                       {canClaimLogin ? `+${nextLoginReward} altın kazanacaksın` : 'Bugün toplandı, yarın gel!'}
+                     </p>
+                   </>
+                )}
+              </div>
+              
+              {canSaveBrokenStreak ? (
+                  <div className="flex flex-col gap-2 shrink-0">
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setView('shop')}
+                        className="neo-button px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-black rounded-xl flex items-center justify-center gap-1 text-xs shadow-[0_0_15px_rgba(6,182,212,0.5)] transition-all"
+                      >
+                         ❄️ KURTAR
+                      </motion.button>
+                      <button
+                        onClick={handleLoginClaim}
+                        className="text-textMuted text-[10px] uppercase font-bold hover:text-danger active:scale-95 transition-all text-center"
+                      >
+                         Vazgeç & Sıfırla
+                      </button>
+                  </div>
+              ) : (
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleLoginClaim}
+                    disabled={!canClaimLogin || isClaiming}
+                    className={`neo-button px-6 py-3 font-black rounded-xl flex items-center justify-center gap-2 text-sm min-w-[100px] transition-all shrink-0 ${
+                      canClaimLogin
+                        ? 'bg-orange-500 text-black shadow-[0_5px_20px_rgba(249,115,22,0.4)] hover:bg-orange-400'
+                        : 'bg-white/5 text-textMuted cursor-not-allowed'
+                    }`}
+                  >
+                    {dailyClaimed ? <Check className="w-5 h-5 text-green-400" /> : canClaimLogin ? `AL` : `ALINDI`}
+                    {dailyClaimed && <span className="text-green-400 text-xs text-black ml-1">+{dailyReward}</span>}
+                  </motion.button>
               )}
             </div>
-          </div>
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={handleLoginClaim}
-            disabled={!canClaimLogin || isClaiming}
-            className={`neo-button px-5 py-3 font-black rounded-xl flex items-center justify-center gap-2 text-sm min-w-[80px] transition-all ${
-              canClaimLogin
-                ? 'bg-orange-500 text-textMain shadow-[0_5px_20px_rgba(249,115,22,0.3)]'
-                : 'bg-white/5 text-textMuted cursor-not-allowed'
-            }`}
-          >
-            {dailyClaimed ? <Check className="w-5 h-5 text-green-400" /> : canClaimLogin ? `Al` : `✓`}
-            {dailyClaimed && <span className="text-green-400 text-xs">+{dailyReward}</span>}
-          </motion.button>
         </div>
       </div>
 
@@ -1636,6 +1894,132 @@ const DuelloLostScreen = () => {
   );
 };
 
+const VsScreen = () => {
+  const { setView, user } = useUserStore();
+  const { opponent } = useGameStore();
+  const [countdown, setCountdown] = useState(3);
+  const [showVs, setShowVs] = useState(false);
+
+  useEffect(() => {
+    // Show VS animation
+    setTimeout(() => setShowVs(true), 500);
+
+    // Countdown
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setTimeout(() => setView('game'), 1000); // give 1 sec for "GO!"
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [setView]);
+
+  if (!user || !opponent) return null;
+
+  const getAvatarId = (photoUrl?: string | null) => photoUrl?.startsWith('icon:') ? photoUrl.split(':')[1] : 'UserIcon';
+  
+  const UserIconObj = PREDEFINED_AVATARS.find(a => a.id === getAvatarId(user.photoURL)) || PREDEFINED_AVATARS[0];
+  const UserIcon = UserIconObj.icon;
+
+  const OppIconObj = PREDEFINED_AVATARS.find(a => a.id === getAvatarId(opponent.photoURL)) || PREDEFINED_AVATARS[0];
+  const OppIcon = OppIconObj.icon;
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 relative z-10 text-textMain overflow-hidden bg-bgStart">
+      {/* Background dynamic split */}
+      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-primary/20 to-transparent z-0 animate-fade-in" />
+      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-danger/20 to-transparent z-0 animate-fade-in" />
+      
+      {/* User Profile (Top) */}
+      <motion.div 
+        initial={{ y: -200, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: "spring", bounce: 0.4, duration: 0.8 }}
+        className="flex flex-col items-center z-10 -mt-20"
+      >
+        <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 shadow-2xl overflow-hidden relative bg-surface ${user.equipped?.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.6)]' : user.equipped?.frame === 'frame_neon' ? 'border-[#0ea5e9] shadow-[0_0_30px_rgba(14,165,233,0.6)]' : 'border-primary'}`}>
+           {user.photoURL && !user.photoURL.startsWith('icon:') ? (
+              <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
+           ) : (
+              <UserIcon className={`w-14 h-14 ${UserIconObj.color}`} strokeWidth={1.5} />
+           )}
+        </div>
+        <h2 className="text-3xl font-display font-black mt-4 text-textMain drop-shadow-lg">{user.displayName || 'Sen'}</h2>
+        <div className="bg-primary/20 px-4 py-1 rounded-full border border-primary/30 mt-2">
+           <span className="text-primary font-bold tracking-widest text-xs uppercase">SEN</span>
+        </div>
+      </motion.div>
+
+      {/* VS Badge (Center) */}
+      <div className="relative z-20 my-8 flex items-center justify-center p-8 w-full">
+         <div className="absolute inset-x-4 h-px bg-white/10 z-0"></div>
+         <motion.div 
+           initial={{ scale: 0, rotate: -180 }}
+           animate={{ scale: showVs ? 1 : 0, rotate: showVs ? 0 : -180 }}
+           transition={{ type: "spring", bounce: 0.6, duration: 0.8 }}
+           className="w-24 h-24 rounded-full bg-black border-4 border-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.5)] z-10 flex items-center justify-center"
+         >
+           <span className="text-5xl font-black font-display text-yellow-500 italic drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">VS</span>
+         </motion.div>
+         
+         {/* COUNTDOWN OVERLAY */}
+         <AnimatePresence>
+            {(() => {
+              const getCountdownPos = (c: number) => {
+                switch(c) {
+                   case 3: return { x: -80, y: -120, rotate: -15 };
+                   case 2: return { x: 80, y: 120, rotate: 10 };
+                   case 1: return { x: -60, y: 80, rotate: -5 };
+                   default: return { x: 0, y: 0, rotate: 0 };
+                }
+              };
+              const pos = getCountdownPos(countdown);
+              const isGo = countdown <= 0;
+
+              return (
+                <motion.div 
+                  key={countdown}
+                  initial={{ scale: 2, opacity: 0, x: pos.x, y: pos.y, rotate: pos.rotate - 20 }}
+                  animate={{ scale: 1, opacity: isGo ? 1 : 0.3, x: pos.x, y: pos.y, rotate: pos.rotate }}
+                  exit={{ scale: 0, opacity: 0, x: pos.x, y: pos.y, rotate: pos.rotate + 20 }}
+                  transition={{ duration: 0.4, type: "spring", bounce: 0.5 }}
+                  className={`absolute font-black font-display pointer-events-none drop-shadow-2xl z-50 ${isGo ? 'text-[10rem] text-yellow-400 opacity-100' : 'text-[8rem] text-white'}`}
+                >
+                  {isGo ? 'GO!' : countdown}
+                </motion.div>
+              );
+            })()}
+         </AnimatePresence>
+      </div>
+
+      {/* Opponent Profile (Bottom) */}
+      <motion.div 
+        initial={{ y: 200, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: "spring", bounce: 0.4, duration: 0.8 }}
+        className="flex flex-col items-center z-10"
+      >
+        <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 shadow-2xl relative overflow-hidden bg-surface ${opponent.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.6)]' : opponent.frame === 'frame_neon' ? 'border-[#0ea5e9] shadow-[0_0_30px_rgba(14,165,233,0.6)]' : 'border-danger'}`}>
+           {opponent.photoURL && !opponent.photoURL.startsWith('icon:') ? (
+              <img src={opponent.photoURL} alt="Opponent" className="w-full h-full object-cover" />
+           ) : (
+              <OppIcon className={`w-14 h-14 ${OppIconObj.color}`} strokeWidth={1.5} />
+           )}
+        </div>
+        <h2 className="text-3xl font-display font-black mt-4 text-textMain drop-shadow-lg">{opponent.displayName}</h2>
+        <div className="bg-danger/20 px-4 py-1 rounded-full border border-danger/30 mt-2">
+           <span className="text-danger font-bold tracking-widest text-xs uppercase">RAKİP</span>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const GameScreen = () => {
   const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount, matchId, matchProgress, boardSize } = useGameStore();
   const { setView, user } = useUserStore();
@@ -1644,6 +2028,20 @@ const GameScreen = () => {
   
   const [opponentProgress, setOpponentProgress] = useState(0);
   const [myRole, setMyRole] = useState<'player1' | 'player2' | null>(null);
+  
+  // Emote states
+  const [opponentEmote, setOpponentEmote] = useState<string | null>(null);
+  const [myEmote, setMyEmote] = useState<string | null>(null);
+  const [showEmoteMenu, setShowEmoteMenu] = useState(false);
+  const [lastOpponentEmoteTime, setLastOpponentEmoteTime] = useState<number>(0);
+  const [showSurrenderModal, setShowSurrenderModal] = useState(false);
+
+  const availableEmotes = ['👍', '👎'];
+  if (user?.inventory) {
+      user.inventory.forEach(item => {
+          if (item.startsWith('emote_')) availableEmotes.push(item.replace('emote_', ''));
+      });
+  }
 
   useEffect(() => {
     if (status !== 'playing' && gameMode !== 'duello') return;
@@ -1679,13 +2077,24 @@ const GameScreen = () => {
               useUserStore.getState().updateTrophies(-10); // Penalty for losing
               useUserStore.getState().updateWinStreak(false);
               playError();
+           } else if (data.winnerUid === userUid && status === 'playing') {
+              // The opponent surrendered or disconnected making us the winner
+              useGameStore.setState({ status: 'won' });
            }
          }
          
          if (data.player1?.uid === userUid) {
              setOpponentProgress(data.player2Progress || 0);
+             if (data.player2Emote && data.player2Emote.time > lastOpponentEmoteTime) {
+                 setOpponentEmote(data.player2Emote.emoji);
+                 setLastOpponentEmoteTime(data.player2Emote.time);
+             }
          } else {
              setOpponentProgress(data.player1Progress || 0);
+             if (data.player1Emote && data.player1Emote.time > lastOpponentEmoteTime) {
+                 setOpponentEmote(data.player1Emote.emoji);
+                 setLastOpponentEmoteTime(data.player1Emote.time);
+             }
          }
        }
     });
@@ -1717,6 +2126,49 @@ const GameScreen = () => {
      }
   }, [status, gameMode, matchId, userUid]);
 
+  // Clear Opponent emote after 3 seconds
+  useEffect(() => {
+     if (opponentEmote) {
+         const timer = setTimeout(() => setOpponentEmote(null), 3000);
+         return () => clearTimeout(timer);
+     }
+  }, [opponentEmote]);
+
+  // Clear My emote after 3 seconds
+  useEffect(() => {
+     if (myEmote) {
+         const timer = setTimeout(() => setMyEmote(null), 3000);
+         return () => clearTimeout(timer);
+     }
+  }, [myEmote]);
+
+  const sendEmote = (emoji: string) => {
+     if (!myRole || !matchId || gameMode !== 'duello') return;
+     setMyEmote(emoji);
+     setShowEmoteMenu(false);
+     updateDoc(doc(db, 'matches', matchId), {
+         [`${myRole}Emote`]: { emoji, time: Date.now() }
+     }).catch(() => {});
+  };
+
+  // Handle Tab Close / App Kill
+  useEffect(() => {
+     const handleBeforeUnload = () => {
+         if (status === 'playing' && gameMode === 'duello' && matchId && myRole && userUid) {
+             // Synchronous effort to penalize and end match if they just close the app
+             useGameStore.getState().setShaking(false);
+             const opponentUid = myRole === 'player1' ? (useGameStore.getState().opponent?.uid || 'player2') : (useGameStore.getState().opponent?.uid || 'player1');
+             updateDoc(doc(db, 'matches', matchId), {
+                 status: 'finished',
+                 winnerUid: opponentUid
+             }).catch(() => {});
+         }
+     };
+
+     window.addEventListener('beforeunload', handleBeforeUnload);
+     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [status, gameMode, matchId, myRole, userUid]);
+
   if (status === 'won') return <VictoryScreen />;
   if (status === 'lost' && gameMode === 'time_attack') return <GameOverScreen />;
   if (status === 'lost' && gameMode === 'duello') return <DuelloLostScreen />;
@@ -1726,7 +2178,14 @@ const GameScreen = () => {
       <header className="glass-header sticky top-0 z-20 w-full relative">
         <div className="w-full max-w-md mx-auto flex items-center justify-between px-6 py-4 relative">
           <button
-            onClick={() => setView('menu')}
+            onClick={() => {
+              if (gameMode === 'duello') {
+                 // Geri çıkışı engelle
+                 alert("Düello menüsünden çıkamazsınız. Çıkmak için aşağıdaki koca kırmızı 'PES ET' butonunu kullanmalısınız!");
+              } else {
+                 setView('menu');
+              }
+            }}
             className="w-10 h-10 bg-surface rounded-xl flex items-center justify-center hover:bg-surfaceAlt border border-white/5 neo-button"
           >
             <ArrowLeft className="w-5 h-5 text-textMain" />
@@ -1755,22 +2214,156 @@ const GameScreen = () => {
               {timeLeft}s
             </div>
           )}
+
+          {/* User's own emote overlay */}
+          <AnimatePresence>
+              {myEmote && (
+                 <motion.div 
+                   initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                   animate={{ opacity: 1, scale: 1, y: 0 }}
+                   exit={{ opacity: 0, scale: 0.8, y: -20 }}
+                   className="absolute bottom-[-10px] left-8 transform translate-y-full text-4xl drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] pointer-events-none z-50"
+                 >
+                    {myEmote}
+                 </motion.div>
+              )}
+          </AnimatePresence>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center -mt-6 w-full max-w-md mx-auto">
+      <main className="flex-1 flex flex-col items-center justify-center -mt-6 w-full max-w-md mx-auto relative">
         <Grid />
+
+        {/* Opponent Emote Display */}
+        <AnimatePresence>
+            {opponentEmote && gameMode === 'duello' && (
+                <motion.div
+                   initial={{ opacity: 0, scale: 0.5, y: 100 }}
+                   animate={{ opacity: 1, scale: 1, y: -20 }}
+                   exit={{ opacity: 0, scale: 0.8, y: -40 }}
+                   transition={{ type: "spring", damping: 15, stiffness: 200 }}
+                   className="absolute bottom-10 right-4 bg-white text-black p-4 rounded-[2rem] rounded-br-sm shadow-2xl text-5xl z-50 flex items-center justify-center border-4 border-black/10 origin-bottom-right"
+                >
+                   {opponentEmote}
+                </motion.div>
+            )}
+        </AnimatePresence>
       </main>
 
-      <footer className="p-6 flex gap-4 w-full max-w-md mx-auto">
-        <button onClick={useHint} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt">
-          <Lightbulb className="w-5 h-5 text-primary" />
-          <span className="font-display tracking-wide">İPUCU</span>
+      <footer className="p-6 flex gap-4 w-full max-w-md mx-auto relative z-40">
+        {gameMode !== 'duello' ? (
+           <button onClick={useHint} disabled={useGameStore(s => s.hintsLeft) <= 0} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt disabled:opacity-50 disabled:cursor-not-allowed">
+             <Lightbulb className="w-5 h-5 text-primary" />
+             <span className="font-display tracking-wide">İPUCU ({useGameStore(s => s.hintsLeft)})</span>
+           </button>
+        ) : null}
+        {gameMode === 'duello' && (
+           <button 
+             onClick={() => setShowSurrenderModal(true)}
+             className="neo-button flex-1 h-20 bg-surfaceAlt border border-danger/30 text-danger rounded-[1.25rem] flex items-center justify-center gap-2 hover:bg-danger/20 transition-colors"
+           >
+              <X className="w-8 h-8" />
+              <span className="font-display font-black tracking-widest text-lg">PES ET</span>
+           </button>
+        )}
+        
+        <button onClick={resetGrid} className={clsx(
+           "neo-button bg-surface text-textMain rounded-[1.25rem] flex items-center justify-center border border-white/5 hover:bg-surfaceAlt transition-colors",
+           gameMode === 'duello' ? "w-20 h-20 shrink-0 text-textMuted" : "w-16 h-16 shrink-0 text-danger"
+        )}>
+          <RotateCcw className={gameMode === 'duello' ? "w-7 h-7" : "w-6 h-6"} />
         </button>
-        <button onClick={resetGrid} className="neo-button w-16 h-16 bg-surface text-danger shrink-0 rounded-[1.25rem] flex items-center justify-center border border-white/5 hover:bg-surfaceAlt">
-          <RotateCcw className="w-6 h-6" />
-        </button>
+
+        {/* Emotes Button & Menu (Only in duel mode) */}
+        {gameMode === 'duello' && (
+            <div className="relative flex-1">
+               <AnimatePresence>
+                  {showEmoteMenu && (
+                     <motion.div 
+                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                        className="absolute bottom-full right-0 mb-4 bg-surfaceAlt border border-white/10 p-4 rounded-[2rem] shadow-2xl flex flex-wrap gap-3 w-64 z-50 justify-center"
+                     >
+                        {availableEmotes.map(emoji => (
+                           <button 
+                             key={emoji}
+                             onClick={() => sendEmote(emoji)}
+                             className="text-4xl p-2.5 hover:bg-white/10 rounded-2xl transition-all active:scale-90"
+                           >
+                              {emoji}
+                           </button>
+                        ))}
+                     </motion.div>
+                  )}
+               </AnimatePresence>
+               <button 
+                 onClick={() => setShowEmoteMenu(!showEmoteMenu)} 
+                 className={clsx(
+                    "neo-button w-full h-20 rounded-[1.25rem] flex items-center justify-center border border-white/5 transition-colors",
+                    showEmoteMenu ? 'bg-primary text-white' : 'bg-surface text-textMain hover:bg-surfaceAlt'
+                 )}
+               >
+                 <span className="text-4xl">😊</span>
+               </button>
+            </div>
+        )}
       </footer>
+
+      {/* Surrender Confirmation Modal */}
+      <AnimatePresence>
+        {showSurrenderModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-6"
+            onClick={() => setShowSurrenderModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 40 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 40 }}
+              transition={{ type: "spring", bounce: 0.3, duration: 0.5 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-surface border border-white/10 rounded-[2.5rem] p-8 w-full max-w-sm shadow-[0_0_60px_rgba(244,63,94,0.15)] flex flex-col items-center text-center"
+            >
+              <div className="w-20 h-20 rounded-full bg-danger/20 flex items-center justify-center mb-5 border border-danger/30">
+                <X className="w-10 h-10 text-danger" />
+              </div>
+              <h3 className="text-2xl font-display font-black text-textMain mb-2">Pes Etmek İstiyor Musun?</h3>
+              <p className="text-textMuted text-sm mb-8 leading-relaxed">
+                Bu düellodan çekilirsen <span className="text-danger font-bold">-10 kupa</span> kaybedeceksin ve rakibin kazanacak.
+              </p>
+              <div className="flex gap-3 w-full">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowSurrenderModal(false)}
+                  className="neo-button flex-1 py-4 bg-primary text-black font-display font-black text-lg rounded-2xl shadow-[0_5px_20px_rgba(16,185,129,0.3)] hover:bg-primary/90 transition-all"
+                >
+                  DEVAM ET
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setShowSurrenderModal(false);
+                    if (matchId && myRole && userUid) {
+                      updateDoc(doc(db, 'matches', matchId), {
+                        status: 'finished',
+                        winnerUid: myRole === 'player1' ? (useGameStore.getState().opponent?.uid || 'player2') : (useGameStore.getState().opponent?.uid || 'player1')
+                      }).catch(() => {});
+                    }
+                    useGameStore.setState({ status: 'lost', timeLeft: 0 });
+                  }}
+                  className="neo-button flex-1 py-4 bg-danger/20 text-danger font-display font-black text-lg rounded-2xl border border-danger/30 hover:bg-danger/30 transition-all"
+                >
+                  PES ET
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1829,6 +2422,8 @@ export default function App() {
   return (
     <div className="w-full relative h-[100dvh] selection:bg-primary/30 overflow-hidden">
       <div className="bg-ambient" />
+      <SeasonRewardOverlay />
+      <RankUpOverlay />
       
       <AnimatePresence mode="wait">
         <motion.div
@@ -1844,6 +2439,8 @@ export default function App() {
           {currentView === 'menu' && <MainMenu />}
           {currentView === 'auth' && <AuthScreen />}
           {currentView === 'matchmaking' && <MatchmakingScreen />}
+          {currentView === 'friend_duel' && <FriendDuelScreen />}
+          {currentView === 'vs_screen' && <VsScreen />}
           {currentView === 'game' && <GameScreen />}
           {currentView === 'guide' && <GuideScreen />}
           {currentView === 'shop' && <ShopScreen />}

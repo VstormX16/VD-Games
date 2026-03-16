@@ -2,7 +2,7 @@ export type CellState = 'active' | 'passive';
 export type CellType = 'normal' | 'negative' | 'locked' | 'unknown';
 export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack' | 'duello';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive' | 'time_attack' | 'daily';
-export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests';
+export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests' | 'vs_screen' | 'friend_duel';
 
 export interface UserProfile {
   uid: string;
@@ -15,6 +15,7 @@ export interface UserProfile {
   trophies?: number;
   seasonTrophies?: number; // Trophies earned in the current season
   seasonId?: string;       // Current season identifier (e.g. '2026-S1')
+  pendingSeasonReward?: { rankName: string; coins: number; } | null;
   inventory?: string[]; // IDs of purchased items
   equipped?: Record<string, string>; // Category -> Item ID
   totalScore?: number; // legacy

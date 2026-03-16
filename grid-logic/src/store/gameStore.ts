@@ -15,15 +15,16 @@ interface GameState {
   timeLeft: number | null;
   scoreCount: number;
   isShaking: boolean;
+  hintsLeft: number;
   matchId: string | null;
-  opponent: { displayName: string } | null;
+  opponent: { displayName: string, uid?: string, photoURL?: string, frame?: string } | null;
   matchProgress: number;
   
   // Actions
   toggleCell: (row: number, col: number) => void;
   checkWinCondition: () => void;
   startLevel: (levelNumber: number, mode?: GameMode, diff?: Difficulty) => void;
-  startDuello: (matchId: string, opponentName: string, seed: string) => void;
+  startDuello: (matchId: string, opponentName: string, seed: string, opponentUid?: string, photoURL?: string, frame?: string) => void;
   resetGrid: () => void;
   useHint: () => void;
   decrementTimeLeft: () => void;
@@ -97,6 +98,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   timeLeft: null,
   scoreCount: 0,
   isShaking: false,
+  hintsLeft: 1,
   matchId: null,
   opponent: null,
   matchProgress: 0,
@@ -251,7 +253,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  startDuello: (matchId, opponentName, seed) => {
+  startDuello: (matchId, opponentName, seed, opponentUid?, photoURL?, frame?) => {
     // A standard medium level but fully seeded
     const config = { ...getLevelConfig(1, 'medium'), seed };
     const { cells, rowTargets, colTargets } = generateGrid(config);
@@ -266,10 +268,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       difficulty: 'medium',
       gameMode: 'duello',
       matchId,
-      opponent: { displayName: opponentName },
+      opponent: { displayName: opponentName, uid: opponentUid, photoURL, frame },
       matchProgress: 0,
       timeLeft: null, // We could add a time limit to duello later
-      scoreCount: 0
+      scoreCount: 0,
+      hintsLeft: 0 // No hints in duello
     });
   },
 
@@ -297,6 +300,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       status: 'playing',
       difficulty: selectedDifficulty,
       gameMode: selectedMode,
+      hintsLeft: 1, // Only 1 hint per level for normal modes
       ...(selectedMode === 'time_attack' && levelNumber === 1 && { timeLeft: 60, scoreCount: 0 })
     });
   },
@@ -313,8 +317,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   useHint: () => {
-    const { cells, status } = get();
-    if (status !== 'playing') return;
+    const { cells, status, hintsLeft, gameMode } = get();
+    if (status !== 'playing' || hintsLeft <= 0 || gameMode === 'duello') return;
 
     // Find a cell that is not in its solution state
     const wrongCells: {r: number, c: number}[] = [];
@@ -337,7 +341,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         type: 'locked' // Lock it so they can't mess it up
       };
 
-      set({ cells: newCells });
+      set({ cells: newCells, hintsLeft: hintsLeft - 1 });
       get().checkWinCondition();
     }
   }
