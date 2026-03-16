@@ -2,7 +2,7 @@ export type CellState = 'active' | 'passive';
 export type CellType = 'normal' | 'negative' | 'locked' | 'unknown';
 export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack' | 'duello';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive' | 'time_attack' | 'daily';
-export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests' | 'vs_screen' | 'friend_duel';
+export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests' | 'vs_screen' | 'friend_duel' | 'friends';
 
 export interface UserProfile {
   uid: string;
@@ -29,6 +29,8 @@ export interface UserProfile {
   dailyQuestsProgress?: Record<string, { count: number; claimed: boolean }>; // questId -> progress
   weeklyQuestsDate?: string; // ISO week string to reset weekly quests
   weeklyQuestsProgress?: Record<string, { count: number; claimed: boolean }>; // questId -> progress
+  friends?: string[]; // Array of friend UIDs
+  friendSlots?: number; // Max friends allowed (default 5, purchasable)
 }
 
 export interface CellData {

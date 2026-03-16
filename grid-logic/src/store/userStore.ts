@@ -30,6 +30,9 @@ interface UserState {
   updateQuestProgress: (action: import('../data/quests').QuestAction) => Promise<void>;
   claimQuestReward: (questId: string, isWeekly: boolean, reward: number) => Promise<void>;
   claimSeasonReward: () => Promise<boolean>;
+  addFriend: (friendUid: string) => Promise<{ success: boolean; error?: string }>;
+  removeFriend: (friendUid: string) => Promise<void>;
+  buyFriendSlot: () => Promise<boolean>;
   initializeAuth: () => void;
 }
 
@@ -66,6 +69,8 @@ export const useUserStore = create<UserState>((set, get) => ({
         if (!profile.equipped) profile.equipped = {};
         if (typeof profile.playtimeSeconds !== 'number') profile.playtimeSeconds = 0;
         if (typeof profile.playtimeRewardClaimed !== 'number') profile.playtimeRewardClaimed = 0;
+        if (!profile.friends) profile.friends = [];
+        if (typeof profile.friendSlots !== 'number') profile.friendSlots = 5;
         if (typeof profile.loginStreak !== 'number') profile.loginStreak = 0;
         if (typeof profile.winStreak !== 'number') profile.winStreak = 0;
       } else {
@@ -80,6 +85,8 @@ export const useUserStore = create<UserState>((set, get) => ({
           trophies: 0,
           winStreak: 0,
           inventory: [],
+          friends: [],
+          friendSlots: 5,
           equipped: {}
         };
         await setDoc(userRef, profile);
@@ -432,6 +439,79 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  addFriend: async (friendUid: string) => {
+    const { user } = get();
+    if (!user) return { success: false, error: 'Not logged in' };
+    
+    const friends = user.friends || [];
+    const maxSlots = user.friendSlots || 5;
+    
+    if (friends.includes(friendUid)) return { success: false, error: 'Zaten arkadaşın.' };
+    if (friends.length >= maxSlots) return { success: false, error: 'Arkadaş slotun dolu! Mağazadan ek slot satın alabilirsin.' };
+    if (friendUid === user.uid) return { success: false, error: 'Kendini ekleyemezsin!' };
+    
+    // Check if friend user exists
+    const friendRef = doc(db, 'users', friendUid);
+    const friendSnap = await getDoc(friendRef);
+    if (!friendSnap.exists()) return { success: false, error: 'Oyuncu bulunamadı.' };
+    
+    const newFriends = [...friends, friendUid];
+    set({ user: { ...user, friends: newFriends } });
+    
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
+      // Also add to friend's list (mutual)
+      const friendData = friendSnap.data();
+      const friendFriends = friendData.friends || [];
+      const friendMaxSlots = friendData.friendSlots || 5;
+      if (!friendFriends.includes(user.uid) && friendFriends.length < friendMaxSlots) {
+        await updateDoc(friendRef, { friends: [...friendFriends, user.uid] });
+      }
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: 'Bağlantı hatası.' };
+    }
+  },
+
+  removeFriend: async (friendUid: string) => {
+    const { user } = get();
+    if (!user) return;
+    
+    const newFriends = (user.friends || []).filter(f => f !== friendUid);
+    set({ user: { ...user, friends: newFriends } });
+    
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
+      // Also remove from friend's list
+      const friendRef = doc(db, 'users', friendUid);
+      const friendSnap = await getDoc(friendRef);
+      if (friendSnap.exists()) {
+        const friendFriends = (friendSnap.data().friends || []).filter((f: string) => f !== user.uid);
+        await updateDoc(friendRef, { friends: friendFriends });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  buyFriendSlot: async () => {
+    const { user } = get();
+    if (!user || user.coins < 5000) return false;
+    
+    const newCoins = user.coins - 5000;
+    const newSlots = (user.friendSlots || 5) + 1;
+    set({ user: { ...user, coins: newCoins, friendSlots: newSlots } });
+    
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, friendSlots: newSlots });
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
   initializeAuth: () => {
     onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
@@ -449,6 +529,8 @@ export const useUserStore = create<UserState>((set, get) => ({
           if (!ud.equipped) ud.equipped = {};
           if (typeof ud.playtimeSeconds !== 'number') ud.playtimeSeconds = 0;
           if (typeof ud.playtimeRewardClaimed !== 'number') ud.playtimeRewardClaimed = 0;
+          if (!ud.friends) ud.friends = [];
+          if (typeof ud.friendSlots !== 'number') ud.friendSlots = 5;
           if (typeof ud.loginStreak !== 'number') ud.loginStreak = 0;
 
           const currentSeason = getCurrentSeason();

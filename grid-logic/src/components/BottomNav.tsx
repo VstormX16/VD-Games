@@ -9,7 +9,7 @@ export const BottomNav = () => {
   const t = useTranslation();
 
   // Hide nav on game, matchmaking, and auth screens.
-  if (['game', 'matchmaking', 'auth', 'settings'].includes(currentView)) {
+  if (['game', 'matchmaking', 'auth', 'settings', 'vs_screen', 'friend_duel', 'friends'].includes(currentView)) {
     return null;
   }
 
@@ -64,7 +64,7 @@ export const BottomNav = () => {
                     <item.icon 
                       className={clsx(
                         "w-[22px] h-[22px] relative z-10 transition-colors duration-300", 
-                        isActive && item.id === 'menu' ? "text-primary drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "",
+                        isActive && item.id === 'menu' ? "text-primary drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]" : "",
                         isActive && item.id !== 'menu' ? "drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" : ""
                       )} 
                       strokeWidth={isActive ? 2.5 : 2} 

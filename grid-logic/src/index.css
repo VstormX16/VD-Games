@@ -9,8 +9,8 @@
   --bg-end: 24 24 27;
   --surface: 39 39 42;
   --surface-alt: 63 63 70;
-  --primary: 16 185 129;
-  --primary-dark: 5 150 105;
+  --primary: 168 85 247;
+  --primary-dark: 147 51 234;
   --danger: 244 63 94;
   --danger-dark: 225 29 72;
   --text-white: 255 255 255;
@@ -23,8 +23,8 @@ html[data-theme="theme_light"] {
   --bg-end: 226 232 240;
   --surface: 255 255 255;
   --surface-alt: 241 245 249;
-  --primary: 16 185 129;
-  --primary-dark: 5 150 105;
+  --primary: 168 85 247;
+  --primary-dark: 147 51 234;
   --danger: 244 63 94;
   --danger-dark: 225 29 72;
   --text-white: 15 23 42;
@@ -75,7 +75,79 @@ html[data-theme="theme_crimson"] {
   .neo-button {
     @apply relative overflow-hidden transition-all duration-200 active:scale-95;
   }
+  .neo-button:hover {
+    transform: translateY(-1px);
+  }
+  .neo-button:active {
+    transform: translateY(0) scale(0.95);
+  }
   .glass-header {
     @apply bg-bgStart/80 backdrop-blur-xl border-b border-white/5;
   }
+  .glass-card {
+    @apply bg-surface/50 backdrop-blur-xl border border-white/10 shadow-xl;
+  }
+}
+
+/* Ambient animated background */
+.bg-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.bg-ambient::before,
+.bg-ambient::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.08;
+  animation: float 20s ease-in-out infinite;
+}
+.bg-ambient::before {
+  width: 600px;
+  height: 600px;
+  background: rgb(var(--primary));
+  top: -200px;
+  right: -200px;
+  animation-delay: -5s;
+}
+.bg-ambient::after {
+  width: 400px;
+  height: 400px;
+  background: rgb(var(--danger));
+  bottom: -100px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -30px) scale(1.05); }
+  50% { transform: translate(-20px, 20px) scale(0.95); }
+  75% { transform: translate(10px, 40px) scale(1.02); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(var(--primary), 0.3); }
+  50% { box-shadow: 0 0 40px rgba(var(--primary), 0.6); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Stripe animation for progress bars */
+@keyframes stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 1rem 0; }
 }

@@ -6,7 +6,7 @@ import { Grid } from './components/Grid';
 import {
   Play, RotateCcw, Lightbulb,
   Wifi, Target, User as UserIcon, LogOut, ArrowLeft, Clock, Flame, Lock, Coins, Settings, Swords,
-  Pencil, Check, X, Ghost, Sword, Shield, Crown, Zap, Heart, Star, Tv, Music, BookOpen
+  Pencil, Check, X, Ghost, Sword, Shield, Crown, Zap, Heart, Star, Tv, Music, BookOpen, Users, UserPlus, Trash2, Copy
 } from 'lucide-react';
 import { collection, query, orderBy, limit, getDocs, doc, setDoc, updateDoc, onSnapshot, where, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -51,7 +51,7 @@ const MainMenu = () => {
 
         <div className="w-full h-px bg-white/10 my-2" />
 
-        <button onClick={() => handleStart('progressive')} className="neo-button w-full py-5 bg-primary/10 text-primary font-display font-black text-xl rounded-2xl shadow-[0_8px_30px_rgba(16,185,129,0.25)] flex items-center justify-center gap-3 border border-primary/50">
+        <button onClick={() => handleStart('progressive')} className="neo-button w-full py-5 bg-primary/10 text-primary font-display font-black text-xl rounded-2xl shadow-[0_8px_30px_rgba(168,85,247,0.25)] flex items-center justify-center gap-3 border border-primary/50">
           {t('progressive')}
         </button>
         <p className="text-textMuted text-xs text-center px-4 mb-4">{t('progressive_desc')}</p>
@@ -100,13 +100,13 @@ const MainMenu = () => {
             className="relative mb-6 group flex justify-center items-center"
           >
             <div className="absolute inset-0 bg-primary opacity-20 blur-2xl rounded-full scale-[1.5] transition-transform group-hover:scale-[1.8] duration-1000 -z-10" />
-            <img src="/logo.svg" alt="VD-Games Logo" className="w-28 h-28 object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-transform group-hover:scale-105 duration-300" />
+            <img src="/logo.svg" alt="VD-Games Logo" className="w-28 h-28 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-transform group-hover:scale-105 duration-300" />
           </motion.div>
 
           <h1 className="text-5xl font-display font-black mb-2 tracking-tight drop-shadow-md">
             VD-Games
           </h1>
-          <p className="text-primary font-bold tracking-[0.3em] text-xs uppercase opacity-80">
+          <p className="text-textMuted font-bold tracking-[0.3em] text-xs uppercase opacity-80">
             {t('subtitle')}
           </p>
         </div>
@@ -143,15 +143,15 @@ const MainMenu = () => {
             onClick={() => {
               if (user) {
                 playClick();
-                setView('friend_duel');
+                setView('friends');
               } else {
                 setView('auth');
               }
             }}
             className="neo-button w-full py-4 bg-purple-500/10 text-purple-400 font-display font-bold text-sm rounded-2xl border border-purple-500/20 flex items-center justify-center gap-2"
           >
-            <UserIcon className="w-5 h-5" />
-            Arkadaşınla Oyna
+            <Users className="w-5 h-5" />
+            Arkadaşlarınla Oyna
           </motion.button>
 
           <motion.button
@@ -163,7 +163,7 @@ const MainMenu = () => {
                 setView('auth');
               }
             }}
-            className="neo-button w-full py-5 bg-primary/10 text-primary font-display font-bold text-lg rounded-2xl shadow-[0_8px_30px_rgba(16,185,129,0.25)] flex items-center justify-center gap-3 border border-primary/50"
+            className="neo-button w-full py-5 bg-primary/10 text-primary font-display font-bold text-lg rounded-2xl shadow-[0_8px_30px_rgba(168,85,247,0.25)] flex items-center justify-center gap-3 border border-primary/50"
           >
             <Wifi className="w-6 h-6" />
             {t('play_online')}
@@ -330,7 +330,7 @@ const MatchmakingScreen = () => {
            }
            if (!timestamp || isNaN(timestamp)) timestamp = 0;
 
-           const isOld = now - timestamp > 45000; // 45s heartbeat timeout
+           const isOld = now - timestamp > 60000; // 60s heartbeat timeout
 
            if (isOld) {
                // Cleanup zombie
@@ -487,7 +487,7 @@ const FriendDuelScreen = () => {
            <p className="text-textMuted text-sm mb-6 px-4">Bir oda kur ve gelen kodu arkadaşına gönder.</p>
            <button 
              onClick={handleCreate}
-             className="neo-button w-full py-5 bg-primary text-black font-display font-black text-xl rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)]"
+              className="neo-button w-full py-5 bg-primary text-white font-display font-black text-xl rounded-2xl shadow-[0_10px_30px_rgba(168,85,247,0.3)]"
            >
              ODA KUR
            </button>
@@ -523,6 +523,188 @@ const FriendDuelScreen = () => {
     </div>
   );
 };
+
+const FriendsScreen = () => {
+  const { user, setView, addFriend, removeFriend } = useUserStore();
+  const [friendUid, setFriendUid] = useState('');
+  const [friendProfiles, setFriendProfiles] = useState<{uid: string; displayName: string; photoURL?: string | null}[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
+  const [copiedUid, setCopiedUid] = useState(false);
+
+  useEffect(() => {
+    if (!user?.friends?.length) {
+      setLoading(false);
+      setFriendProfiles([]);
+      return;
+    }
+    const fetchFriends = async () => {
+      setLoading(true);
+      const profiles = [];
+      for (const fUid of user.friends!) {
+        try {
+          const snap = await getDoc(doc(db, 'users', fUid));
+          if (snap.exists()) {
+            const d = snap.data();
+            profiles.push({ uid: fUid, displayName: d.displayName || 'İsimsiz', photoURL: d.photoURL });
+          }
+        } catch { /* skip */ }
+      }
+      setFriendProfiles(profiles);
+      setLoading(false);
+    };
+    fetchFriends();
+  }, [user?.friends]);
+
+  if (!user) { setView('menu'); return null; }
+
+  const handleAdd = async () => {
+    setAddError(''); setAddSuccess('');
+    if (!friendUid.trim()) return;
+    const result = await addFriend(friendUid.trim());
+    if (result.success) {
+      setAddSuccess('Arkadaş eklendi!');
+      setFriendUid('');
+      playSuccess();
+    } else {
+      setAddError(result.error || 'Hata oluştu.');
+      playError();
+    }
+  };
+
+  const handleChallenge = (_friendUid: string) => {
+    playClick();
+    const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+    useUserStore.setState({ matchmakingParams: { mode: 'create', roomCode: code } });
+    // We'll show the code so they can share it
+    setView('friend_duel');
+  };
+
+  const handleCopyUid = () => {
+    navigator.clipboard.writeText(user.uid).catch(() => {});
+    setCopiedUid(true);
+    setTimeout(() => setCopiedUid(false), 2000);
+  };
+
+  return (
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-textMain pb-32 overflow-y-auto scrollbar-hide">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => setView('menu')} className="p-3 glass-card rounded-xl neo-button shrink-0">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-3xl font-display font-black">Arkadaşlar</h2>
+        <div className="ml-auto flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20 font-bold text-xs">
+          <Users className="w-3.5 h-3.5" />
+          {(user.friends || []).length}/{user.friendSlots || 5}
+        </div>
+      </div>
+
+      {/* My UID */}
+      <div className="glass-card rounded-2xl p-4 mb-6">
+        <p className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2">Senin Oyuncu ID'n</p>
+        <div className="flex items-center gap-3">
+          <code className="flex-1 bg-bgStart px-4 py-3 rounded-xl text-textMain font-mono text-sm truncate border border-white/5">
+            {user.uid}
+          </code>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={handleCopyUid}
+            className="neo-button p-3 bg-primary/10 text-primary rounded-xl border border-primary/20 hover:bg-primary/20"
+          >
+            {copiedUid ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Add Friend */}
+      <div className="glass-card rounded-2xl p-5 mb-6">
+        <h3 className="text-lg font-display font-bold mb-4 flex items-center gap-2">
+          <UserPlus className="w-5 h-5 text-primary" />
+          Arkadaş Ekle
+        </h3>
+        <div className="flex gap-3">
+          <input
+            type="text"
+            value={friendUid}
+            onChange={e => setFriendUid(e.target.value)}
+            placeholder="Oyuncu ID yapıştır..."
+            className="flex-1 bg-bgStart border border-white/10 rounded-xl py-3 px-4 text-textMain text-sm font-mono focus:border-primary outline-none placeholder:text-textMuted/50"
+          />
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={handleAdd}
+            className="neo-button px-5 py-3 bg-primary text-white font-bold rounded-xl shadow-[0_5px_15px_rgba(168,85,247,0.3)]"
+          >
+            Ekle
+          </motion.button>
+        </div>
+        {addError && <p className="text-danger text-xs mt-2 font-medium">{addError}</p>}
+        {addSuccess && <p className="text-green-400 text-xs mt-2 font-medium">{addSuccess}</p>}
+      </div>
+
+      {/* Friends List */}
+      <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Arkadaş Listesi</h3>
+      {loading ? (
+        <div className="text-center text-textMuted py-8">Yükleniyor...</div>
+      ) : friendProfiles.length === 0 ? (
+        <div className="glass-card rounded-2xl p-8 text-center">
+          <Users className="w-12 h-12 text-textMuted/30 mx-auto mb-3" />
+          <p className="text-textMuted text-sm">Henüz arkadaşın yok.</p>
+          <p className="text-textMuted/70 text-xs mt-1">Oyuncu ID paylaşarak arkadaş ekle!</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {friendProfiles.map(f => {
+            const avatarId = f.photoURL?.startsWith('icon:') ? f.photoURL.split(':')[1] : 'UserIcon';
+            const AvatarObj = PREDEFINED_AVATARS.find(a => a.id === avatarId) || PREDEFINED_AVATARS[0];
+            const AvatarIcon = AvatarObj.icon;
+            return (
+              <motion.div
+                key={f.uid}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card rounded-2xl p-4 flex items-center gap-4"
+              >
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 border-surfaceAlt ${AvatarObj.bg}`}>
+                  {f.photoURL && !f.photoURL.startsWith('icon:') ? (
+                    <img src={f.photoURL} alt="" className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <AvatarIcon className={`w-6 h-6 ${AvatarObj.color}`} strokeWidth={1.5} />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-textMain truncate">{f.displayName}</p>
+                  <p className="text-textMuted text-[10px] font-mono truncate">{f.uid.slice(0, 12)}...</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => handleChallenge(f.uid)}
+                    className="neo-button px-4 py-2.5 bg-primary/10 text-primary font-bold text-xs rounded-xl border border-primary/20 hover:bg-primary/20"
+                  >
+                    <Swords className="w-4 h-4" />
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={async () => {
+                      playClick();
+                      await removeFriend(f.uid);
+                    }}
+                    className="neo-button p-2.5 bg-danger/10 text-danger rounded-xl border border-danger/20 hover:bg-danger/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </motion.button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AuthScreen = () => {
   const { signInWithGoogle, setView, loading } = useUserStore();
 
@@ -719,11 +901,11 @@ const GuideScreen = () => {
         <div className="bg-surface p-6 rounded-[2rem] border border-white/5">
           <h3 className="text-xl font-display font-bold text-primary mb-3">Temel Kural</h3>
           <p className="text-textMuted text-sm leading-relaxed mb-4">
-            Oyunun amacı çok basit: <span className="text-textMain font-bold">Kutuları seçerek</span> (üzerlerine tıklayıp zümrüt yeşili yaparak) satırların sonunda ve sütunların altında yazan
+            Oyunun amacı çok basit: <span className="text-textMain font-bold">Kutuları seçerek</span> (üzerlerine tıklayıp aktif hale getirerek) satırların sonunda ve sütunların altında yazan
             <span className="text-textMain font-bold"> Hedef Sayılara</span> ulaşmak.
           </p>
           <p className="text-textMuted text-sm leading-relaxed">
-            Tüm satır ve sütun hedefleri <span className="text-primary font-bold bg-primary/20 px-1 rounded">Yeşil</span> olduğunda o bölümü kazanırsın!
+            Tüm satır ve sütun hedefleri <span className="text-primary font-bold bg-primary/20 px-1 rounded">Doğru</span> olduğunda o bölümü kazanırsın!
           </p>
         </div>
 
@@ -1237,6 +1419,29 @@ const ShopScreen = () => {
             </div>
 
           </div>
+        </div>
+
+        {/* Friend Slot */}
+        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-4 mt-8 px-2">Sosyal</h3>
+        <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center border border-primary/30">
+              <UserPlus className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-display font-bold text-lg text-textMain">+1 Arkadaş Slotu</h3>
+              <p className="text-textMuted text-xs">Mevcut: {(user.friends || []).length}/{user.friendSlots || 5} slot</p>
+            </div>
+          </div>
+          <button onClick={async () => {
+            playClick();
+            const success = await useUserStore.getState().buyFriendSlot();
+            if (success) playSuccess();
+            else playError();
+          }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+            <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+            <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 5000</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1761,7 +1966,7 @@ const VictoryScreen = () => {
       particleCount: 150,
       spread: 100,
       origin: { y: 0.5 },
-      colors: ['#10b981', '#f43f5e', '#ffffff']
+      colors: ['#a855f7', '#f43f5e', '#ffffff']
     });
   }, []);
 
@@ -2339,7 +2544,7 @@ const GameScreen = () => {
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setShowSurrenderModal(false)}
-                  className="neo-button flex-1 py-4 bg-primary text-black font-display font-black text-lg rounded-2xl shadow-[0_5px_20px_rgba(16,185,129,0.3)] hover:bg-primary/90 transition-all"
+                  className="neo-button flex-1 py-4 bg-primary text-white font-display font-black text-lg rounded-2xl shadow-[0_5px_20px_rgba(168,85,247,0.3)] hover:bg-primary/90 transition-all"
                 >
                   DEVAM ET
                 </motion.button>
@@ -2448,6 +2653,7 @@ export default function App() {
           {currentView === 'profile' && <ProfileScreen />}
           {currentView === 'quests' && <QuestsScreen />}
           {currentView === 'settings' && <SettingsScreen />}
+          {currentView === 'friends' && <FriendsScreen />}
         </motion.div>
       </AnimatePresence>
       
