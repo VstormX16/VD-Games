@@ -13,6 +13,8 @@ export interface UserProfile {
   levels: Record<Difficulty, number>;
   coins: number;
   trophies?: number;
+  seasonTrophies?: number; // Trophies earned in the current season
+  seasonId?: string;       // Current season identifier (e.g. '2026-S1')
   inventory?: string[]; // IDs of purchased items
   equipped?: Record<string, string>; // Category -> Item ID
   totalScore?: number; // legacy
@@ -21,10 +23,11 @@ export interface UserProfile {
   loginStreak?: number;
   playtimeSeconds?: number; // Total seconds played
   playtimeRewardClaimed?: number; // seconds at which last reward was claimed
+  winStreak?: number; // Düello win streak
   dailyQuestsDate?: string; // ISO date string to reset quests
-  dailyQuestsProgress?: Record<string, number>; // questId -> progress count
+  dailyQuestsProgress?: Record<string, { count: number; claimed: boolean }>; // questId -> progress
   weeklyQuestsDate?: string; // ISO week string to reset weekly quests
-  weeklyQuestsProgress?: Record<string, number>; // questId -> progress count
+  weeklyQuestsProgress?: Record<string, { count: number; claimed: boolean }>; // questId -> progress
 }
 
 export interface CellData {

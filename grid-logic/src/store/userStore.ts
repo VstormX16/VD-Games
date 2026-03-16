@@ -3,6 +3,7 @@ import type { UserProfile, AppView } from '../types/game';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getCurrentSeason } from '../utils/season';
 
 interface UserState {
   user: UserProfile | null;
@@ -16,12 +17,14 @@ interface UserState {
   updateScore: (points: number, levelInfo: number, difficulty: import('../types/game').Difficulty) => Promise<void>;
   updateCoins: (amount: number) => Promise<void>;
   updateTrophies: (amount: number) => Promise<void>;
+  updateWinStreak: (won: boolean) => Promise<void>;
   buyItem: (itemId: string, cost: number) => Promise<boolean>;
   equipItem: (category: string, itemId: string) => Promise<void>;
   claimDailyLogin: () => Promise<number>; // returns coins earned
   claimPlaytimeReward: () => Promise<number>; // returns coins earned
   incrementPlaytime: (seconds: number) => void;
-  updateQuestProgress: (questId: string, isWeekly: boolean) => Promise<void>;
+  updateQuestProgress: (action: import('../data/quests').QuestAction) => Promise<void>;
+  claimQuestReward: (questId: string, isWeekly: boolean, reward: number) => Promise<void>;
   initializeAuth: () => void;
 }
 
@@ -56,6 +59,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         if (typeof profile.playtimeSeconds !== 'number') profile.playtimeSeconds = 0;
         if (typeof profile.playtimeRewardClaimed !== 'number') profile.playtimeRewardClaimed = 0;
         if (typeof profile.loginStreak !== 'number') profile.loginStreak = 0;
+        if (typeof profile.winStreak !== 'number') profile.winStreak = 0;
       } else {
         profile = {
           uid: user.uid,
@@ -66,6 +70,7 @@ export const useUserStore = create<UserState>((set, get) => ({
           levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
           coins: 100, // Welcome bonus
           trophies: 0,
+          winStreak: 0,
           inventory: [],
           equipped: {}
         };
@@ -136,13 +141,31 @@ export const useUserStore = create<UserState>((set, get) => ({
     
     // Trophies cannot be less than 0
     const newTrophies = Math.max(0, (user.trophies || 0) + amount);
-    set({ user: { ...user, trophies: newTrophies } });
+    const newSeasonTrophies = Math.max(0, (user.seasonTrophies || 0) + amount);
+    const currentSeason = getCurrentSeason();
+    
+    set({ user: { ...user, trophies: newTrophies, seasonTrophies: newSeasonTrophies, seasonId: currentSeason.id } });
     
     try {
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { trophies: newTrophies });
+      await updateDoc(userRef, { trophies: newTrophies, seasonTrophies: newSeasonTrophies, seasonId: currentSeason.id });
     } catch (error) {
        console.error("Error updating trophies:", error);
+    }
+  },
+
+  updateWinStreak: async (won: boolean) => {
+    const { user } = get();
+    if (!user) return;
+    
+    const newStreak = won ? (user.winStreak || 0) + 1 : 0;
+    set({ user: { ...user, winStreak: newStreak } });
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { winStreak: newStreak });
+    } catch (error) {
+       console.error("Error updating win streak:", error);
     }
   },
 
@@ -255,7 +278,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     return reward;
   },
 
-  updateQuestProgress: async (questId: string, isWeekly: boolean) => {
+  updateQuestProgress: async (action: import('../data/quests').QuestAction) => {
     const { user } = get();
     if (!user) return;
 
@@ -266,22 +289,92 @@ export const useUserStore = create<UserState>((set, get) => ({
       return d.toISOString().split('T')[0];
     })();
 
+    const { getDailyQuests, getWeeklyQuests } = await import('../data/quests');
+    
+    // Find matching daily quests
+    const dailyPool = getDailyQuests(user.uid, today);
+    const dailyMatches = dailyPool.filter(q => q.action === action);
+    
+    let updatedUser = { ...user };
+    let hasDailyUpdates = false;
+
+    if (dailyMatches.length > 0) {
+       const progress = user.dailyQuestsDate === today ? { ...(user.dailyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }> : {};
+       
+       for (const q of dailyMatches) {
+          const currentProc = progress[q.id] || { count: 0, claimed: false };
+          if (!currentProc.claimed) {
+             progress[q.id] = { count: currentProc.count + 1, claimed: false };
+             hasDailyUpdates = true;
+          }
+       }
+       if (hasDailyUpdates) {
+          updatedUser = { ...updatedUser, dailyQuestsDate: today, dailyQuestsProgress: progress };
+       }
+    }
+
+    // Find matching weekly quests
+    const weeklyPool = getWeeklyQuests(user.uid, weekStart);
+    const weeklyMatches = weeklyPool.filter(q => q.action === action);
+    
+    let hasWeeklyUpdates = false;
+    
+    if (weeklyMatches.length > 0) {
+       const progress = user.weeklyQuestsDate === weekStart ? { ...(user.weeklyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }> : {};
+       
+       for (const q of weeklyMatches) {
+          const currentProc = progress[q.id] || { count: 0, claimed: false };
+          if (!currentProc.claimed) {
+             progress[q.id] = { count: currentProc.count + 1, claimed: false };
+             hasWeeklyUpdates = true;
+          }
+       }
+       if (hasWeeklyUpdates) {
+          updatedUser = { ...updatedUser, weeklyQuestsDate: weekStart, weeklyQuestsProgress: progress };
+       }
+    }
+
+    if (hasDailyUpdates || hasWeeklyUpdates) {
+       set({ user: updatedUser });
+       const payload: Record<string, string | Record<string, { count: number, claimed: boolean }>> = {};
+       if (hasDailyUpdates) {
+           payload.dailyQuestsDate = today;
+           if (updatedUser.dailyQuestsProgress) payload.dailyQuestsProgress = updatedUser.dailyQuestsProgress;
+       }
+       if (hasWeeklyUpdates) {
+           payload.weeklyQuestsDate = weekStart;
+           if (updatedUser.weeklyQuestsProgress) payload.weeklyQuestsProgress = updatedUser.weeklyQuestsProgress;
+       }
+       try {
+         await updateDoc(doc(db, 'users', user.uid), payload);
+       } catch (e) {
+         console.error(e);
+       }
+    }
+  },
+
+  claimQuestReward: async (questId: string, isWeekly: boolean, reward: number) => {
+    const { user } = get();
+    if (!user) return;
+
     if (isWeekly) {
-      const progress = user.weeklyQuestsDate === weekStart ? { ...(user.weeklyQuestsProgress || {}) } : {};
-      progress[questId] = (progress[questId] || 0) + 1;
-      const updated = { ...user, weeklyQuestsDate: weekStart, weeklyQuestsProgress: progress };
-      set({ user: updated });
-      try {
-        await updateDoc(doc(db, 'users', user.uid), { weeklyQuestsDate: weekStart, weeklyQuestsProgress: progress });
-      } catch (e) { console.error(e); }
+       const progress = { ...(user.weeklyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }>;
+       progress[questId] = { ...(progress[questId] || { count: 0 }), claimed: true };
+       const newCoins = (user.coins || 0) + reward;
+       const updated = { ...user, coins: newCoins, weeklyQuestsProgress: progress };
+       set({ user: updated });
+       try {
+         await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, weeklyQuestsProgress: progress });
+       } catch (e) { console.error(e); }
     } else {
-      const progress = user.dailyQuestsDate === today ? { ...(user.dailyQuestsProgress || {}) } : {};
-      progress[questId] = (progress[questId] || 0) + 1;
-      const updated = { ...user, dailyQuestsDate: today, dailyQuestsProgress: progress };
-      set({ user: updated });
-      try {
-        await updateDoc(doc(db, 'users', user.uid), { dailyQuestsDate: today, dailyQuestsProgress: progress });
-      } catch (e) { console.error(e); }
+       const progress = { ...(user.dailyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }>;
+       progress[questId] = { ...(progress[questId] || { count: 0 }), claimed: true };
+       const newCoins = (user.coins || 0) + reward;
+       const updated = { ...user, coins: newCoins, dailyQuestsProgress: progress };
+       set({ user: updated });
+       try {
+         await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, dailyQuestsProgress: progress });
+       } catch (e) { console.error(e); }
     }
   },
 
@@ -303,7 +396,20 @@ export const useUserStore = create<UserState>((set, get) => ({
           if (typeof ud.playtimeSeconds !== 'number') ud.playtimeSeconds = 0;
           if (typeof ud.playtimeRewardClaimed !== 'number') ud.playtimeRewardClaimed = 0;
           if (typeof ud.loginStreak !== 'number') ud.loginStreak = 0;
+
+          const currentSeason = getCurrentSeason();
+          let needsUpdate = false;
+          if (ud.seasonId !== currentSeason.id) {
+             ud.seasonId = currentSeason.id;
+             ud.seasonTrophies = 0; // Reset season trophies
+             needsUpdate = true;
+          }
+
           set({ user: ud, loading: false });
+          
+          if (needsUpdate) {
+             updateDoc(userRef, { seasonId: currentSeason.id, seasonTrophies: 0 }).catch(console.error);
+          }
         } else {
           set({ user: null, loading: false }); // Failsafe
         }

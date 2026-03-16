@@ -13,6 +13,23 @@
   --primary-dark: 5 150 105;
   --danger: 244 63 94;
   --danger-dark: 225 29 72;
+  --text-white: 255 255 255;
+  --text-main: 248 250 252;
+  --text-muted: 161 161 170;
+}
+
+html[data-theme="theme_light"] {
+  --bg-start: 248 250 252;
+  --bg-end: 226 232 240;
+  --surface: 255 255 255;
+  --surface-alt: 241 245 249;
+  --primary: 16 185 129;
+  --primary-dark: 5 150 105;
+  --danger: 244 63 94;
+  --danger-dark: 225 29 72;
+  --text-white: 15 23 42;
+  --text-main: 15 23 42;
+  --text-muted: 71 85 105;
 }
 
 html[data-theme="theme_neon"] {

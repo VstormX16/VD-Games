@@ -21,8 +21,9 @@ export default {
         primaryGlow: 'rgb(var(--primary) / 0.4)',
         danger: 'rgb(var(--danger) / <alpha-value>)', 
         dangerDark: 'rgb(var(--danger-dark) / <alpha-value>)', 
-        textMain: '#f8fafc',
-        textMuted: '#a1a1aa', 
+        textMain: 'rgb(var(--text-main) / <alpha-value>)',
+        textMuted: 'rgb(var(--text-muted) / <alpha-value>)', 
+        inverse: 'rgb(var(--text-white) / <alpha-value>)',
       },
       animation: {
         'pop': 'pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',

@@ -203,17 +203,39 @@ export const useGameStore = create<GameState>((set, get) => ({
          setTimeout(() => {
            get().startLevel(get().level + 1, gameMode, get().difficulty);
          }, 300);
+
+         // Increment time attack quests
+         import('./userStore').then(module => {
+            const { useUserStore } = module;
+            if (useUserStore.getState().user) {
+               useUserStore.getState().updateQuestProgress('play_time_attack');
+               useUserStore.getState().updateQuestProgress('play_level');
+            }
+         });
       } else if (gameMode === 'duello') {
          // Stop the game, GameScreen will handle firebase update
          set({ status: 'won' });
+
+         // Increment online match quests
+         import('./userStore').then(module => {
+            const { useUserStore } = module;
+            if (useUserStore.getState().user) {
+               useUserStore.getState().updateQuestProgress('play_online');
+               useUserStore.getState().updateQuestProgress('win_online');
+               useUserStore.getState().updateQuestProgress('play_level');
+            }
+         });
       } else {
          // Normal modes/daily
          set({ status: 'won' });
          
          import('./userStore').then(module => {
             const { useUserStore } = module;
-            const { user, updateScore, updateCoins } = useUserStore.getState();
+            const { user, updateScore, updateCoins, updateQuestProgress } = useUserStore.getState();
             if (user) {
+              // Update generic playtime/level quests
+              updateQuestProgress('play_level');
+
               if (gameMode === 'online') {
                 updateScore(points, get().level, get().difficulty);
                 updateCoins(10); // Standard victory coins
@@ -221,6 +243,7 @@ export const useGameStore = create<GameState>((set, get) => ({
               if (gameMode === 'daily') {
                 updateScore(points, 1, 'daily');
                 updateCoins(50); // Daily chunk of coins
+                updateQuestProgress('play_daily');
               }
             }
          });

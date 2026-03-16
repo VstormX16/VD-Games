@@ -6,9 +6,9 @@ import { Grid } from './components/Grid';
 import {
   Play, RotateCcw, Lightbulb,
   Wifi, Target, User as UserIcon, LogOut, ArrowLeft, Clock, Flame, Lock, Coins, Settings, Swords,
-  Pencil, Check, X, Ghost, Sword, Shield, Crown, Zap, Heart, Star, Tv
+  Pencil, Check, X, Ghost, Sword, Shield, Crown, Zap, Heart, Star, Tv, Music, BookOpen
 } from 'lucide-react';
-import { collection, query, orderBy, limit, getDocs, doc, setDoc, updateDoc, onSnapshot, where, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, setDoc, updateDoc, onSnapshot, where, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import type { Difficulty } from './types/game';
 import { initAudio, playClick, triggerHapticPop, playSuccess, playError } from './utils/audioHaptics';
@@ -17,6 +17,36 @@ import { useSettingsStore } from './store/settingsStore';
 import { useTranslation } from './utils/i18n';
 import { BottomNav } from './components/BottomNav';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getDailyQuests, getWeeklyQuests } from './data/quests';
+
+// We redefine tiers to include Platinum, Yücelik (Immortal), Radyant (Radiant)
+const RANK_THRESHOLDS = [
+  { name: 'Radyant', min: 5000, max: 99999, color: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/30', glow: 'shadow-[0_0_25px_rgba(252,211,77,0.6)]', icon: Crown },
+  { name: 'Immortal', min: 3000, max: 5000, color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/30', glow: 'shadow-[0_0_20px_rgba(244,63,94,0.5)]', icon: Crown },
+  { name: 'Yücelik', min: 1500, max: 3000, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30', glow: 'shadow-[0_0_20px_rgba(168,85,247,0.5)]', icon: Crown },
+  { name: 'Elmas', min: 1000, max: 1500, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', glow: 'shadow-[0_0_15px_rgba(34,211,238,0.3)]', icon: Shield },
+  { name: 'Platin', min: 600, max: 1000, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30', glow: 'shadow-[0_0_15px_rgba(45,212,191,0.3)]', icon: Shield },
+  { name: 'Altın', min: 300, max: 600, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', glow: 'shadow-[0_0_15px_rgba(250,204,21,0.3)]', icon: Star },
+  { name: 'Gümüş', min: 100, max: 300, color: 'text-gray-300', bg: 'bg-gray-400/10', border: 'border-gray-400/30', glow: 'shadow-[0_0_10px_rgba(209,213,219,0.2)]', icon: Shield },
+  { name: 'Bronz', min: 0, max: 100, color: 'text-orange-700', bg: 'bg-orange-900/10', border: 'border-orange-900/30', glow: '', icon: Shield }
+];
+
+const getLeagueInfo = (trophies: number) => {
+  const currentRankIndex = RANK_THRESHOLDS.findIndex(r => trophies >= r.min);
+  const rankInfo = currentRankIndex !== -1 ? RANK_THRESHOLDS[currentRankIndex] : RANK_THRESHOLDS[RANK_THRESHOLDS.length - 1];
+  
+  // Calculate progress to next rank
+  let progressPercentage = 100;
+  if (currentRankIndex > 0) {
+     const currentLevelMin = rankInfo.min;
+     const nextLevelMin = RANK_THRESHOLDS[currentRankIndex - 1].min;
+     const pointsInLevel = trophies - currentLevelMin;
+     const pointsRequired = nextLevelMin - currentLevelMin;
+     progressPercentage = Math.min(100, Math.max(0, (pointsInLevel / pointsRequired) * 100));
+  }
+
+  return { ...rankInfo, progressPercentage };
+};
 
 const MainMenu = () => {
   const { startLevel } = useGameStore();
@@ -32,7 +62,7 @@ const MainMenu = () => {
     };
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-4 animate-fade-in relative z-10 text-white">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-4 animate-fade-in relative z-10 text-textMain">
         <h2 className="text-3xl font-display font-black mb-8">{t('difficulty_selection')}</h2>
 
         <button onClick={() => handleStart('easy')} className="neo-button w-full py-5 bg-surface text-textMain font-display font-bold text-lg rounded-2xl shadow-xl flex items-center justify-center gap-3 border border-white/5 hover:bg-surfaceAlt">
@@ -60,7 +90,7 @@ const MainMenu = () => {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-hidden w-full relative z-10 text-white animate-fade-in pt-safe pb-safe">
+    <div className="flex flex-col h-[100dvh] overflow-hidden w-full relative z-10 text-textMain animate-fade-in pt-safe pb-28 scrollbar-hide">
       {/* Top Bar for Coins and Settings */}
       <header className="w-full flex justify-between items-center px-6 pt-6 pb-2 z-20 max-w-md mx-auto relative">
         <motion.button
@@ -68,7 +98,7 @@ const MainMenu = () => {
           onClick={() => setView('settings')}
           className="p-2.5 bg-surface/80 backdrop-blur-md rounded-xl hover:bg-surfaceAlt border border-white/5 neo-button hover:rotate-90 transition-all duration-300 shadow-lg"
         >
-          <Settings className="w-5 h-5 text-textMuted hover:text-white" />
+          <Settings className="w-5 h-5 text-textMuted hover:text-textMain" />
         </motion.button>
         <motion.div 
           initial={{ y: -20, opacity: 0 }}
@@ -186,6 +216,18 @@ const MainMenu = () => {
               <span className="text-xs uppercase tracking-wider text-center">{t('daily_challenge')}</span>
             </motion.button>
           </div>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+                playClick();
+                setView('guide');
+            }}
+            className="neo-button mt-2 w-full py-4 bg-surfaceAlt text-textMuted font-display font-bold text-sm rounded-2xl border border-white/5 hover:bg-white/5 hover:text-textMain flex items-center justify-center gap-2 transition-colors"
+          >
+            <BookOpen className="w-5 h-5" />
+            Nasıl Oynanır?
+          </motion.button>
         </div>
       </div>
     </div>
@@ -210,18 +252,55 @@ const MatchmakingScreen = () => {
     let unsubscribe: () => void;
     let hasStartedGame = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let pingInterval: ReturnType<typeof setInterval> | null = null;
 
     const findOrCreateMatch = async () => {
       try {
+        // 1. Cleanup old matches in the background (fire and forget)
+        const cleanupOldMatches = async () => {
+          try {
+            const finishedQuery = query(collection(db, 'matches'), where('status', '==', 'finished'), limit(5));
+            const cancelledQuery = query(collection(db, 'matches'), where('status', '==', 'cancelled'), limit(5));
+            const [finishedSnap, cancelledSnap] = await Promise.all([getDocs(finishedQuery), getDocs(cancelledQuery)]);
+            
+            finishedSnap.forEach(d => deleteDoc(doc(db, 'matches', d.id)).catch(() => {}));
+            cancelledSnap.forEach(d => deleteDoc(doc(db, 'matches', d.id)).catch(() => {}));
+          } catch {
+            // Ignore if security rules block it or it fails
+          }
+        };
+        cleanupOldMatches();
 
-        // 2. Query for waiting match
-        const q = query(collection(db, 'matches'), where('status', '==', 'waiting'), limit(1));
+        // 2. Query for waiting match (fetch multiple and filter JS to avoid index mismatch and clear zombies)
+        const q = query(collection(db, 'matches'), where('status', '==', 'waiting'), limit(20));
         const snapshot = await getDocs(q);
 
-        if (!snapshot.empty) {
+        let validMatchDoc = null;
+        const now = Date.now();
+
+        for (const docSnap of snapshot.docs) {
+           const data = docSnap.data();
+           const isMe = data.player1?.uid === userUid;
+           
+           let timestamp = data.createdAt;
+           if (!timestamp && docSnap.id.includes('_')) {
+               timestamp = parseInt(docSnap.id.split('_')[0], 10);
+           }
+           if (!timestamp || isNaN(timestamp)) timestamp = 0;
+
+           const isOld = now - timestamp > 45000; // 45s heartbeat timeout
+
+           if (isOld) {
+               // Cleanup zombie
+               deleteDoc(doc(db, 'matches', docSnap.id)).catch(() => {});
+           } else if (!isMe && !validMatchDoc) {
+               validMatchDoc = docSnap;
+           }
+        }
+
+        if (validMatchDoc) {
           // Match found! Join it.
-          const matchDoc = snapshot.docs[0];
-          currentMatchId = matchDoc.id;
+          currentMatchId = validMatchDoc.id;
           
           await updateDoc(doc(db, 'matches', currentMatchId), {
             player2: { uid: userUid, displayName: userDisplayName || 'Oyuncu' },
@@ -237,7 +316,14 @@ const MatchmakingScreen = () => {
             status: 'waiting',
             seed: currentMatchId, // Good enough random seed
             player1: { uid: userUid, displayName: userDisplayName || 'Oyuncu' },
+            createdAt: Date.now()
           });
+
+          pingInterval = setInterval(() => {
+             if (currentMatchId && !hasStartedGame) {
+                updateDoc(doc(db, 'matches', currentMatchId), { createdAt: Date.now() }).catch(() => {});
+             }
+          }, 15000); // keep alive
         }
 
         // 3. Listen to the match for updates
@@ -271,6 +357,7 @@ const MatchmakingScreen = () => {
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
+      if (pingInterval) clearInterval(pingInterval);
       if (unsubscribe) unsubscribe();
       if (currentMatchId && !hasStartedGame) {
         getDoc(doc(db, 'matches', currentMatchId)).then((snap) => {
@@ -280,10 +367,10 @@ const MatchmakingScreen = () => {
         });
       }
     };
-  }, [userUid, userDisplayName, setView, startDuello]);
+  }, [userUid, userDisplayName, setView, startDuello, user?.uid]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-white">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-textMain">
       <div className="w-32 h-32 rounded-full border-4 border border-danger/30 flex items-center justify-center animate-pulse relative">
         <Swords size={48} className="text-danger animate-bounce shadow-danger/50 drop-shadow-[0_0_15px_rgba(244,63,94,0.5)]" />
         <div className="absolute inset-0 rounded-full border-t-4 border-danger animate-spin" style={{ animationDuration: '2s' }} />
@@ -293,7 +380,7 @@ const MatchmakingScreen = () => {
 
       <button
         onClick={() => setView('menu')}
-        className="mt-10 text-textMuted underline hover:text-white"
+        className="mt-10 text-textMuted underline hover:text-textMain"
       >
         İptal Et
       </button>
@@ -305,7 +392,7 @@ const AuthScreen = () => {
   const { signInWithGoogle, setView, loading } = useUserStore();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-white">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-textMain">
       <h2 className="text-3xl font-display font-black mb-4">Hoş Geldin!</h2>
       <p className="text-center text-textMuted mb-8">
         Çevrimiçi modda oynayıp puan kazanmak ve liderlik tablosuna girmek için Google ile giriş yapmalısın.
@@ -321,7 +408,7 @@ const AuthScreen = () => {
 
       <button
         onClick={() => setView('menu')}
-        className="text-textMuted mt-4 underline decoration-textMuted/30 hover:text-white"
+        className="text-textMuted mt-4 underline decoration-textMuted/30 hover:text-textMain"
       >
         Geri Dön
       </button>
@@ -333,19 +420,29 @@ const LeaderboardScreen = () => {
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'progressive' | 'hard' | 'time_attack' | 'trophies'>('progressive');
+  const [seasonInfo, setSeasonInfo] = useState<{name: string, daysRemaining: number} | null>(null);
 
+  useEffect(() => {
+    import('./utils/season').then(({ getCurrentSeason }) => {
+      setSeasonInfo(getCurrentSeason());
+    });
+  }, []);
   useEffect(() => {
     const fetchLeaders = async () => {
       setLoading(true);
       try {
-        const orderField = activeTab === 'trophies' ? 'trophies' : `scores.${activeTab}`;
+        let orderField = `scores.${activeTab}`;
+        if (activeTab === 'trophies') {
+            orderField = 'seasonTrophies'; // Query season trophies for leaderboard
+        }
+        
         const q = query(
           collection(db, 'users'),
           orderBy(orderField, 'desc'),
           limit(20)
         );
         const snap = await getDocs(q);
-        setLeaders(snap.docs.map(d => ({ id: d.id, ...d.data() })) as any);
+        setLeaders(snap.docs.map(d => ({ id: d.id, ...d.data() })) as never[]);
       } catch (error) {
         console.error("Error fetching leaders:", error);
       } finally {
@@ -356,9 +453,18 @@ const LeaderboardScreen = () => {
   }, [activeTab]);
 
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white overflow-y-auto pb-24 scrollbar-hide">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
+      <div className="flex flex-col mb-4">
         <h2 className="text-3xl font-display font-black">Liderlik Tablosu</h2>
+        {seasonInfo && (
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-primary font-black uppercase text-xs tracking-wider">{seasonInfo.name}</span>
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="text-textMuted text-xs flex items-center gap-1">
+              <Clock className="w-3 h-3" /> {seasonInfo.daysRemaining} gün kaldı
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 w-full mb-4 overflow-x-auto pb-2 scrollbar-hide">
@@ -373,7 +479,7 @@ const LeaderboardScreen = () => {
             onClick={() => setActiveTab(tab.id as 'progressive' | 'hard' | 'time_attack' | 'trophies')}
             className={clsx(
               "px-4 py-2 font-bold font-display rounded-xl whitespace-nowrap transition-colors border border-white/5",
-              activeTab === tab.id ? "bg-primary text-white" : "bg-surface text-textMuted hover:bg-surfaceAlt"
+              activeTab === tab.id ? "bg-primary text-textMain" : "bg-surface text-textMuted hover:bg-surfaceAlt"
             )}
           >
             {tab.label}
@@ -403,23 +509,59 @@ const LeaderboardScreen = () => {
                   hidden: { opacity: 0, y: 20 },
                   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
                 }}
-                className="bg-surface p-4 rounded-2xl flex items-center justify-between border border-white/5"
+                className={clsx(
+                  "bg-surface p-4 rounded-3xl flex items-center justify-between border relative overflow-hidden group",
+                  i === 0 ? "border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)]" :
+                  i === 1 ? "border-gray-400/30 shadow-[0_0_15px_rgba(156,163,175,0.1)]" :
+                  i === 2 ? "border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.1)]" : "border-white/5"
+                )}
               >
-                <div className="flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500/20 text-yellow-500' :
-                      i === 1 ? 'bg-gray-400/20 text-gray-400' :
-                        i === 2 ? 'bg-orange-500/20 text-orange-500' : 'bg-white/5 text-textMuted'
-                    }`}>
-                    {i + 1}
+                {/* Subtle gradient for top 3 */}
+                {i === 0 && <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 to-transparent pointer-events-none" />}
+                {i === 1 && <div className="absolute inset-0 bg-gradient-to-r from-gray-400/10 to-transparent pointer-events-none" />}
+                {i === 2 && <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-transparent pointer-events-none" />}
+
+                <div className="flex items-center gap-4 relative z-10">
+                  <div className={clsx(
+                    "w-10 h-10 rounded-full flex items-center justify-center font-black font-display text-lg",
+                    i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 text-bgStart shadow-lg' :
+                    i === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500 text-bgStart shadow-md' :
+                    i === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-700 text-bgStart shadow-md' : 
+                    'bg-white/5 text-textMuted border border-white/5'
+                  )}>
+                    {i === 0 ? <Crown className="w-5 h-5" /> : i + 1}
                   </div>
                   <div>
-                    <h3 className="font-bold">{u.displayName || 'İsimsiz Oyuncu'}</h3>
-                    {activeTab !== 'trophies' && <p className="text-xs text-textMuted">Max Lvl: {u.levels?.[activeTab] || 1}</p>}
+                    <div className="flex items-center gap-2">
+                      <h3 className={clsx("font-bold font-display text-lg tracking-tight", i <= 2 ? "text-textMain" : "text-textMain/90")}>
+                        {u.displayName || 'İsimsiz Oyuncu'}
+                      </h3>
+                      {activeTab === 'trophies' && (() => {
+                        const lig = getLeagueInfo(u.trophies || 0);
+                        const LigIcon = lig.icon;
+                        return <LigIcon className={clsx("w-4 h-4", lig.color)} />;
+                      })()}
+                      {u.winStreak && u.winStreak >= 3 && (
+                         <div className="flex items-center gap-0.5 bg-orange-500/10 border border-orange-500/30 px-1.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(249,115,22,0.3)]">
+                            <Flame className="w-3 h-3 text-orange-400" />
+                            <span className="text-[10px] font-black font-mono text-orange-400">{u.winStreak}</span>
+                         </div>
+                      )}
+                    </div>
+                    {activeTab !== 'trophies' && <p className="text-xs text-textMuted tracking-wider font-mono">Max Lvl: {u.levels?.[activeTab] || 1}</p>}
                   </div>
                 </div>
-                <div className="font-display font-black text-primary text-xl flex items-center gap-1">
-                  {activeTab === 'trophies' ? (u.trophies || 0) : (u.scores?.[activeTab] || 0)}
-                  {activeTab === 'trophies' && <span className="text-yellow-500 text-sm">🏆</span>}
+                
+                <div className="flex flex-col items-end relative z-10">
+                  <div className={clsx(
+                    "font-display font-black text-2xl flex items-center gap-1",
+                    i === 0 ? "text-yellow-500" :
+                    i === 1 ? "text-gray-400" :
+                    i === 2 ? "text-orange-500" : "text-primary/90"
+                  )}>
+                    {activeTab === 'trophies' ? (u.seasonTrophies || 0) : (u.scores?.[activeTab] || 0)}
+                    {activeTab === 'trophies' && <span className="text-xl">🏆</span>}
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -432,7 +574,7 @@ const LeaderboardScreen = () => {
 
 const GuideScreen = () => {
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-white overflow-y-auto pb-12">
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
       <div className="flex items-center gap-4 mb-8 sticky top-0 py-2 bg-bgStart/90 backdrop-blur z-20">
         <h2 className="text-3xl font-display font-black leading-none">Nasıl Oynanır?</h2>
       </div>
@@ -442,8 +584,8 @@ const GuideScreen = () => {
         <div className="bg-surface p-6 rounded-[2rem] border border-white/5">
           <h3 className="text-xl font-display font-bold text-primary mb-3">Temel Kural</h3>
           <p className="text-textMuted text-sm leading-relaxed mb-4">
-            Oyunun amacı çok basit: <span className="text-white font-bold">Kutuları seçerek</span> (üzerlerine tıklayıp zümrüt yeşili yaparak) satırların sonunda ve sütunların altında yazan
-            <span className="text-white font-bold"> Hedef Sayılara</span> ulaşmak.
+            Oyunun amacı çok basit: <span className="text-textMain font-bold">Kutuları seçerek</span> (üzerlerine tıklayıp zümrüt yeşili yaparak) satırların sonunda ve sütunların altında yazan
+            <span className="text-textMain font-bold"> Hedef Sayılara</span> ulaşmak.
           </p>
           <p className="text-textMuted text-sm leading-relaxed">
             Tüm satır ve sütun hedefleri <span className="text-primary font-bold bg-primary/20 px-1 rounded">Yeşil</span> olduğunda o bölümü kazanırsın!
@@ -453,20 +595,20 @@ const GuideScreen = () => {
         {/* Locked Boxes */}
         <div className="bg-surface p-6 rounded-[2rem] border border-white/5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-[100px] pointer-events-none" />
-          <Lock className="absolute top-6 right-6 w-8 h-8 text-white/20" />
+          <Lock className="absolute top-6 right-6 w-8 h-8 text-textMain/20" />
 
-          <h3 className="text-xl font-display font-bold text-white mb-3">Asma Kilitli Kutular</h3>
+          <h3 className="text-xl font-display font-bold text-textMain mb-3">Asma Kilitli Kutular</h3>
           <p className="text-textMuted text-sm leading-relaxed mb-3">
-            Bölümler ilerledikçe bazı kutularda asma kilit 🔒 göreceksin. Kilitli kutulara <span className="text-white font-bold underline">dokunamazsın.</span>
+            Bölümler ilerledikçe bazı kutularda asma kilit 🔒 göreceksin. Kilitli kutulara <span className="text-textMain font-bold underline">dokunamazsın.</span>
           </p>
           <ul className="text-sm space-y-2 text-textMuted">
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">■</span>
-              <span>Eğer kilit <span className="text-white font-bold">Yeşil (Aktif)</span> durumdaysa, o sayı sana yardım olsun diye otomatik olarak verilmiştir ve hesaba katılmaz zorundadır.</span>
+              <span>Eğer kilit <span className="text-textMain font-bold">Yeşil (Aktif)</span> durumdaysa, o sayı sana yardım olsun diye otomatik olarak verilmiştir ve hesaba katılmaz zorundadır.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-textMuted/50 mt-0.5">■</span>
-              <span>Eğer kilit <span className="text-white font-bold">Gri (Pasif)</span> durumdaysa, o sayıyı kesinlikle kullanmamanı ister.</span>
+              <span>Eğer kilit <span className="text-textMain font-bold">Gri (Pasif)</span> durumdaysa, o sayıyı kesinlikle kullanmamanı ister.</span>
             </li>
           </ul>
         </div>
@@ -479,21 +621,21 @@ const GuideScreen = () => {
 
           <h3 className="text-xl font-display font-bold text-danger mb-3">Negatif Mayınlar</h3>
           <p className="text-textMuted text-sm leading-relaxed mb-3">
-            Zor zorluklarda bazı kutuların köşesinde "Kırmızı Eksi" bulunur. Bunlara tıkladığında sayıyı <span className="text-white font-bold">TOPLAMAZ, hedefinden ÇIKARIR.</span>
+            Zor zorluklarda bazı kutuların köşesinde "Kırmızı Eksi" bulunur. Bunlara tıkladığında sayıyı <span className="text-textMain font-bold">TOPLAMAZ, hedefinden ÇIKARIR.</span>
           </p>
           <div className="bg-bgStart/50 p-3 rounded-xl border border-danger/10 text-xs text-textMuted/90">
             <span className="text-danger font-bold">Örnek:</span> Hedefin 10 ise ve elinde [7], [5] ve [-2] varsa;<br />
-            7'yi aç + 5'i aç + kırmızı 2'yi aç =  <span className="text-white font-bold">7 + 5 - 2 = 10!</span>
+            7'yi aç + 5'i aç + kırmızı 2'yi aç =  <span className="text-textMain font-bold">7 + 5 - 2 = 10!</span>
           </div>
         </div>
 
         {/* Unknown Boxes */}
         <div className="bg-surface p-6 rounded-[2rem] border border-white/5 relative overflow-hidden">
-          <div className="absolute top-6 right-6 text-4xl font-display font-black text-white/10">?</div>
+          <div className="absolute top-6 right-6 text-4xl font-display font-black text-textMain/10">?</div>
 
-          <h3 className="text-xl font-display font-bold text-white mb-3">Gizli Kutular</h3>
+          <h3 className="text-xl font-display font-bold text-textMain mb-3">Gizli Kutular</h3>
           <p className="text-textMuted text-sm leading-relaxed mb-3">
-            Gerçek zeka testi burada başlar. İleri seviyelerde kutuların içinde sayı yerine <span className="text-white font-bold text-lg">?</span> yazar.
+            Gerçek zeka testi burada başlar. İleri seviyelerde kutuların içinde sayı yerine <span className="text-textMain font-bold text-lg">?</span> yazar.
             İçinde ne yazdığını ancak satırın sonundaki hedeften geriye doğru matematik yaparak Sudoku gibi tahmin edebilirsin!
           </p>
         </div>
@@ -506,6 +648,33 @@ const GuideScreen = () => {
 const ShopScreen = () => {
   const { user, setView } = useUserStore();
   const [isWatchingAd, setIsWatchingAd] = useState(false);
+  const [showVideoOverlay, setShowVideoOverlay] = useState(false);
+  const [currentAdUrl, setCurrentAdUrl] = useState("");
+  const [timeLeft, setTimeLeft] = useState(40);
+  const [canCloseAd, setCanCloseAd] = useState(false);
+
+  const adVideoIds = [
+    "8zN_QIk8_LU",
+    "J8aBh5clWzo",
+    "p8q-PhpcmDk"
+  ];
+
+  useEffect(() => {
+     let timer: ReturnType<typeof setInterval>;
+     if (showVideoOverlay && !canCloseAd) {
+         timer = setInterval(() => {
+             setTimeLeft((prev) => {
+                 if (prev <= 1) {
+                     setCanCloseAd(true);
+                     clearInterval(timer);
+                     return 0;
+                 }
+                 return prev - 1;
+             });
+         }, 1000);
+     }
+     return () => clearInterval(timer);
+  }, [showVideoOverlay, canCloseAd]);
 
   if (!user) {
     setView('menu');
@@ -513,32 +682,94 @@ const ShopScreen = () => {
   }
 
   const handleWatchAd = async () => {
-    if (isWatchingAd) return;
+    if (isWatchingAd || showVideoOverlay) return;
     setIsWatchingAd(true);
+    setCanCloseAd(false);
+    setTimeLeft(40); // 40 saniyelik zorunlu süre
     playClick();
 
-    // Simulate watching a 3 second Ad
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    const randomId = adVideoIds[Math.floor(Math.random() * adVideoIds.length)];
+    setCurrentAdUrl(`https://www.youtube.com/embed/${randomId}?autoplay=1&controls=0&modestbranding=1&rel=0&playsinline=1`);
 
-    try {
-      const { doc, updateDoc, increment } = await import('firebase/firestore');
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        coins: increment(250)
-      });
-      
-      useUserStore.setState({ user: { ...user, coins: (user.coins || 0) + 250 } });
-      playSuccess();
-    } catch (error) {
-      console.error("Ad reward failed", error);
-      playError();
-    } finally {
-      setIsWatchingAd(false);
-    }
+    // Show the video overlay
+    setShowVideoOverlay(true);
+  };
+
+
+  const handleCloseAd = async () => {
+     playClick();
+     setShowVideoOverlay(false);
+
+     try {
+       const { doc, updateDoc, increment } = await import('firebase/firestore');
+       const userRef = doc(db, 'users', user.uid);
+       await updateDoc(userRef, {
+         coins: increment(250)
+       });
+       
+       useUserStore.setState({ user: { ...user, coins: (user.coins || 0) + 250 } });
+       playSuccess();
+     } catch (error) {
+       console.error("Ad reward failed", error);
+       playError();
+     } finally {
+       setIsWatchingAd(false);
+       setCanCloseAd(false);
+     }
   };
 
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] animate-slide-up relative z-10 text-white overflow-y-auto pb-12">
+    <div className="flex flex-col w-full h-[100dvh] animate-slide-up relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
+      
+      {/* AD VIDEO OVERLAY */}
+      <AnimatePresence>
+        {showVideoOverlay && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-4"
+          >
+            <div className="absolute top-8 left-0 w-full flex justify-center z-20 px-4">
+              <div className="w-full max-w-2xl flex items-start justify-between">
+                <div className="bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 text-textMain font-mono text-sm shadow-xl flex items-center gap-2">
+                   <div className="w-3 h-3 rounded-full bg-danger animate-pulse" />
+                   Reklam Oyuncusu
+                </div>
+                
+                {canCloseAd ? (
+                  <button 
+                    onClick={handleCloseAd} 
+                    className="bg-danger/90 hover:bg-danger text-textMain font-black uppercase text-sm px-6 py-2.5 rounded-full border border-white/20 shadow-[0_0_20px_rgba(244,63,94,0.5)] flex items-center gap-2 animate-slide-up"
+                  >
+                     <X className="w-4 h-4" />
+                     Ödülü Al ve Kapat
+                  </button>
+                ) : (
+                  <div className="bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 text-textMain/80 font-mono font-bold text-sm shadow-xl flex items-center gap-2">
+                     <Clock className="w-4 h-4 text-orange-400" />
+                     {timeLeft}s...
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="w-full aspect-video max-w-2xl bg-surface rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(255,255,255,0.1)] relative border border-white/10 z-10">
+               <iframe 
+                 width="100%" 
+                 height="100%" 
+                 src={currentAdUrl} 
+                 title="Ad Video" 
+                 frameBorder="0" 
+                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                 allowFullScreen
+                 className="absolute inset-0 w-full h-full pointer-events-none" // Disable pointer events so they can't pause it easily
+               />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       
       {/* Full-width sticky header */}
       <header className="sticky top-0 z-20 w-full bg-bgStart/80 backdrop-blur-md border-b border-white/5">
@@ -562,7 +793,7 @@ const ShopScreen = () => {
             <div className="w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(250,204,21,0.5)]">
               <Tv className="w-8 h-8 text-black" fill="currentColor" />
             </div>
-            <h3 className="font-display font-black text-2xl text-white mb-2">Ödüllü Reklam İzle</h3>
+            <h3 className="font-display font-black text-2xl text-textMain mb-2">Ödüllü Reklam İzle</h3>
             <p className="text-yellow-100/70 text-sm mb-6 max-w-[200px]">30 saniyelik kısa bir reklam izleyerek anında bedava altın kazan.</p>
             
             <button 
@@ -591,12 +822,15 @@ const ShopScreen = () => {
             
             {/* Theme: Neon Mavi */}
             <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-[#0ea5e9]/20 flex items-center justify-center border border-[#0ea5e9]/30">
+              <div className="flex items-center gap-4 relative">
+                <div className="absolute -top-6 -left-2 rotate-[-10deg] z-10">
+                   <div className="bg-danger text-textMain text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)] border border-white/20 animate-pulse">HOT</div>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-[#0ea5e9]/20 flex items-center justify-center border border-[#0ea5e9]/30 relative">
                   <div className="w-8 h-8 rounded-full bg-[#0ea5e9] shadow-[0_0_15px_rgba(14,165,233,0.5)]" />
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-lg text-white">Neon Mavi</h3>
+                  <h3 className="font-display font-bold text-lg text-textMain">Neon Mavi</h3>
                   <p className="text-textMuted text-xs">Arayüz temasını siber mavi yapar.</p>
                 </div>
               </div>
@@ -615,7 +849,7 @@ const ShopScreen = () => {
                 <button onClick={() => {
                   playClick();
                   useUserStore.getState().equipItem('theme', 'theme_neon');
-                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_neon' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-white/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_neon' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
                    <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.theme === 'theme_neon' ? 'Kullanılıyor' : 'Kullan'}</span>
                 </button>
               )}
@@ -623,12 +857,15 @@ const ShopScreen = () => {
 
             {/* Theme: Kızıl Öfke */}
             <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-[#e11d48]/20 flex items-center justify-center border border-[#e11d48]/30">
+              <div className="flex items-center gap-4 relative">
+                <div className="absolute -top-6 -left-2 rotate-[10deg] z-10 w-fit">
+                   <div className="bg-orange-500 text-textMain text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(249,115,22,0.5)] border border-white/20 animate-pulse">TREND</div>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-[#e11d48]/20 flex items-center justify-center border border-[#e11d48]/30 relative">
                   <div className="w-8 h-8 rounded-full bg-[#e11d48] shadow-[0_0_15px_rgba(225,29,72,0.5)]" />
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-lg text-white">Kızıl Öfke</h3>
+                  <h3 className="font-display font-bold text-lg text-textMain">Kızıl Öfke</h3>
                   <p className="text-textMuted text-xs">Oyun tahtasını kan kırmızı yapar.</p>
                 </div>
               </div>
@@ -647,7 +884,7 @@ const ShopScreen = () => {
                 <button onClick={() => {
                   playClick();
                   useUserStore.getState().equipItem('theme', 'theme_crimson');
-                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_crimson' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-white/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_crimson' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
                    <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.theme === 'theme_crimson' ? 'Kullanılıyor' : 'Kullan'}</span>
                 </button>
               )}
@@ -655,14 +892,17 @@ const ShopScreen = () => {
 
             {/* Feature: Retro Ses Paketi */}
             <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-purple-500/20 flex items-center justify-center border border-purple-500/30">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-purple-400">
-                     <span className="material-symbols-rounded">music_note</span>
+              <div className="flex items-center gap-4 relative">
+                <div className="absolute -top-6 -left-2 rotate-[-10deg] z-10 w-fit">
+                   <div className="bg-purple-500 text-textMain text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(168,85,247,0.5)] border border-white/20 animate-pulse">NOSTALJİ</div>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-purple-500/20 flex items-center justify-center border border-purple-500/30 relative">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                     <Music className="w-5 h-5 text-purple-400" />
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-lg text-white">Retro Ses Paketi</h3>
+                  <h3 className="font-display font-bold text-lg text-textMain">Retro Ses Paketi</h3>
                   <p className="text-textMuted text-xs">Tıklama seslerini 8-bit arcade yapar.</p>
                 </div>
               </div>
@@ -681,7 +921,7 @@ const ShopScreen = () => {
                 <button onClick={() => {
                   playClick();
                   useUserStore.getState().equipItem('sfx', 'sfx_retro');
-                }} className={`neo-button px-4 py-3 ${user.equipped?.sfx === 'sfx_retro' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-white/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                }} className={`neo-button px-4 py-3 ${user.equipped?.sfx === 'sfx_retro' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
                    <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.sfx === 'sfx_retro' ? 'Kullanılıyor' : 'Kullan'}</span>
                 </button>
               )}
@@ -694,7 +934,7 @@ const ShopScreen = () => {
                   <div className="w-8 h-8 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]" />
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-lg text-white">Siberpunk</h3>
+                  <h3 className="font-display font-bold text-lg text-textMain">Siberpunk</h3>
                   <p className="text-textMuted text-xs">Arayüzü neon sarı cyberpunk stiline sokar.</p>
                 </div>
               </div>
@@ -713,8 +953,77 @@ const ShopScreen = () => {
                 <button onClick={() => {
                   playClick();
                   useUserStore.getState().equipItem('theme', 'theme_cyberpunk');
-                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_cyberpunk' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-white/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_cyberpunk' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
                    <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.theme === 'theme_cyberpunk' ? 'Kullanılıyor' : 'Kullan'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Kozmetik Başlıkları Ayırma */}
+            <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-4 mt-8 px-2">Profil Çerçeveleri</h3>
+            
+            {/* Frame: Alev Ruhu */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-orange-500/5 flex items-center justify-center border border-white/5 relative">
+                  <div className="w-10 h-10 rounded-full border-2 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]" />
+                  <Flame className="absolute -top-1 -right-1 w-5 h-5 text-orange-500" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-textMain">Alev Ruhu</h3>
+                  <p className="text-textMuted text-xs">Profil resminin etrafına alevli bir çerçeve ekler.</p>
+                </div>
+              </div>
+              
+              {!user.inventory?.includes('frame_fire') ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('frame_fire', 1500);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 1500</span>
+                 </button>
+              ) : (
+                <button onClick={() => {
+                  playClick();
+                  useUserStore.getState().equipItem('frame', 'frame_fire');
+                }} className={`neo-button px-4 py-3 ${user.equipped?.frame === 'frame_fire' ? 'bg-orange-500/20 text-orange-500 border-orange-500/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.frame === 'frame_fire' ? 'Kullanılıyor' : 'Kullan'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Frame: Neon Halka */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-[#0ea5e9]/5 flex items-center justify-center border border-white/5 relative">
+                  <div className="w-10 h-10 rounded-full border-2 border-[#0ea5e9] shadow-[0_0_15px_rgba(14,165,233,0.5)]" />
+                  <Zap className="absolute -bottom-1 -left-1 w-5 h-5 text-[#0ea5e9]" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-textMain">Neon Halka</h3>
+                  <p className="text-textMuted text-xs">Profil avatarını siber mavi neon halkanın içine alır.</p>
+                </div>
+              </div>
+              
+              {!user.inventory?.includes('frame_neon') ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('frame_neon', 1500);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 1500</span>
+                 </button>
+              ) : (
+                <button onClick={() => {
+                  playClick();
+                  useUserStore.getState().equipItem('frame', 'frame_neon');
+                }} className={`neo-button px-4 py-3 ${user.equipped?.frame === 'frame_neon' ? 'bg-[#0ea5e9]/20 text-[#0ea5e9] border-[#0ea5e9]/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.frame === 'frame_neon' ? 'Kullanılıyor' : 'Kullan'}</span>
                 </button>
               )}
             </div>
@@ -725,6 +1034,8 @@ const ShopScreen = () => {
     </div>
   );
 };
+
+
 
 const PREDEFINED_AVATARS = [
   { id: 'UserIcon', icon: UserIcon, color: 'text-primary', bg: 'bg-primary/20' },
@@ -765,6 +1076,10 @@ const ProfileScreen = () => {
   const CurrentIconObj = PREDEFINED_AVATARS.find(a => a.id === currentAvatarId) || PREDEFINED_AVATARS[0];
   const CurrentIcon = CurrentIconObj.icon;
 
+  const currentTrophies = user.trophies || 0;
+  const league = getLeagueInfo(currentTrophies);
+  const LeagueIcon = league.icon;
+
   const handleSelectAvatar = async (id: string) => {
     const photoURL = `icon:${id}`;
     try {
@@ -777,25 +1092,39 @@ const ProfileScreen = () => {
   };
 
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white pb-24">
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
       <div className="flex items-center gap-4 mb-4">
         <h2 className="text-3xl font-display font-black">Profilim</h2>
       </div>
 
-      <div className="bg-surface border border-white/5 p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl mb-6 relative">
+      {user.winStreak && user.winStreak >= 3 ? (
+         <div className="w-full bg-gradient-to-r from-orange-500/20 to-danger/20 border border-orange-500/30 rounded-2xl p-3 mb-4 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.2)]">
+            <Flame className="w-5 h-5 text-orange-400 animate-pulse" />
+            <span className="font-bold text-orange-400 text-sm">{user.winStreak} Maçlık Galibiyet Serisi!</span>
+            <Flame className="w-5 h-5 text-orange-400 animate-pulse" />
+         </div>
+      ) : null}
+
+      <div className={clsx("bg-surface border p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl mb-6 relative", league.border)}>
+        {/* League Badge floating top right */}
+        <div className={clsx("absolute top-4 right-4 flex flex-col items-center justify-center p-2 rounded-xl", league.bg, league.border)}>
+           <LeagueIcon className={clsx("w-6 h-6 mb-1", league.color)} />
+           <span className={clsx("text-[10px] font-black uppercase tracking-widest", league.color)}>{league.name}</span>
+        </div>
+
         <button 
           onClick={() => setShowAvatarModal(true)}
           className="relative group mb-6"
         >
           {user.photoURL && !user.photoURL.startsWith('icon:') ? (
-            <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-surfaceAlt object-cover" />
+            <img src={user.photoURL} alt="Profile" className={clsx("w-24 h-24 rounded-full border-4 object-cover", user.equipped?.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]' : 'border-surfaceAlt')} />
           ) : (
-            <div className={`w-24 h-24 rounded-full ${CurrentIconObj.bg} flex items-center justify-center border-4 border-surfaceAlt transition-transform group-hover:scale-105`}>
+            <div className={clsx("w-24 h-24 rounded-full flex items-center justify-center border-4 transition-transform group-hover:scale-105", CurrentIconObj.bg, user.equipped?.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]' : user.equipped?.frame === 'frame_neon' ? 'border-[#0ea5e9] shadow-[0_0_20px_rgba(14,165,233,0.6)]' : 'border-surfaceAlt')}>
               <CurrentIcon className={`w-12 h-12 ${CurrentIconObj.color}`} strokeWidth={1.5} />
             </div>
           )}
           <div className="absolute inset-x-0 bottom-0 top-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Pencil className="w-6 h-6 text-white" />
+            <Pencil className="w-6 h-6 text-textMain" />
           </div>
         </button>
 
@@ -808,7 +1137,7 @@ const ProfileScreen = () => {
                 value={editName}
                 onChange={e => setEditName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSaveName()}
-                className="text-xl font-bold font-display bg-transparent text-white outline-none w-full text-center"
+                className="text-xl font-bold font-display bg-transparent text-textMain outline-none w-full text-center"
               />
               <button onClick={() => { setEditName(user.displayName || ''); setIsEditing(false); }} className="p-1.5 text-textMuted hover:text-danger hover:bg-white/5 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
@@ -819,8 +1148,8 @@ const ProfileScreen = () => {
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <h3 className="text-2xl font-bold font-display text-white">{user.displayName || 'İsimsiz Oyuncu'}</h3>
-              <button onClick={() => setIsEditing(true)} className="p-1.5 text-textMuted hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+              <h3 className="text-2xl font-bold font-display text-textMain">{user.displayName || 'İsimsiz Oyuncu'}</h3>
+              <button onClick={() => setIsEditing(true)} className="p-1.5 text-textMuted hover:text-textMain hover:bg-white/5 rounded-lg transition-colors">
                 <Pencil className="w-4 h-4" />
               </button>
             </div>
@@ -829,22 +1158,44 @@ const ProfileScreen = () => {
         
         <p className="text-textMuted text-sm mb-6 mt-1">{user.email}</p>
 
+        {/* Rank Progress Bar */}
+        <div className="w-full mb-6 flex flex-col items-center">
+           <div className="flex justify-between w-full text-xs font-bold mb-1 px-1">
+              <span className={league.color}>{league.name}</span>
+              <span className="text-textMuted">{Math.floor(league.progressPercentage)}%</span>
+           </div>
+           <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden shadow-inner relative border border-white/5">
+              <motion.div 
+                 initial={{ width: 0 }}
+                 animate={{ width: `${league.progressPercentage}%` }}
+                 transition={{ duration: 1, ease: "easeOut" }}
+                 className={clsx("h-full rounded-full bg-current", league.color)}
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem] animate-[stripes_1s_linear_infinite]" />
+           </div>
+           <p className="text-[10px] text-textMuted mt-1 w-full text-center">İkinci haftada bir sezonlar sıfırlanır, kupalara göre ödüller verilir!</p>
+        </div>
+
         <div className="w-full grid grid-cols-2 gap-4">
+          <div className="bg-bgStart p-4 rounded-2xl border border-white/5 flex flex-col items-center text-center">
+            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Toplam Kupa</p>
+            <p className={clsx("text-2xl font-display font-black flex items-center gap-1", league.color)}>
+               {currentTrophies} <span className="text-lg">🏆</span>
+            </p>
+          </div>
+          <div className="bg-bgStart p-4 rounded-2xl border border-white/5 flex flex-col items-center text-center">
+             <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Galibiyet Serisi</p>
+             <p className="text-2xl font-display font-black text-orange-500 flex items-center gap-1">
+                {user.winStreak || 0} <Flame className="w-5 h-5" />
+             </p>
+          </div>
           <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
             <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Skor (İlerlemeli)</p>
             <p className="text-2xl font-display font-black text-primary">{user.scores?.progressive || 0}</p>
           </div>
           <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
-            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Maks Seviye</p>
-            <p className="text-2xl font-display font-black text-white">{user.levels?.progressive || 1}</p>
-          </div>
-          <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
             <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Skor (Zor)</p>
             <p className="text-2xl font-display font-black text-danger">{user.scores?.hard || 0}</p>
-          </div>
-          <div className="bg-bgStart p-4 rounded-2xl border border-white/5">
-            <p className="text-textMuted text-[10px] font-bold uppercase mb-1">Maks Seviye</p>
-            <p className="text-2xl font-display font-black text-white">{user.levels?.hard || 1}</p>
           </div>
         </div>
       </div>
@@ -873,7 +1224,7 @@ const ProfileScreen = () => {
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-display font-black">Avatar Seç</h3>
                 <button onClick={() => setShowAvatarModal(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                  <X className="w-5 h-5 text-textMuted hover:text-white" />
+                  <X className="w-5 h-5 text-textMuted hover:text-textMain" />
                 </button>
               </div>
               <div className="grid grid-cols-4 gap-4">
@@ -897,17 +1248,7 @@ const ProfileScreen = () => {
   );
 };
 
-// ── DAILY QUESTS CONFIG ───────────────────────────────────
-const DAILY_QUESTS = [
-  { id: 'play_1',   label: 'Bir bölüm oyna',         target: 1,  reward: 50  },
-  { id: 'play_3',   label: 'Üç bölüm tamamla',        target: 3,  reward: 120 },
-  { id: 'daily_ch', label: 'Günlük modu oyna',        target: 1,  reward: 80  },
-];
-const WEEKLY_QUESTS = [
-  { id: 'play_20',  label: '20 bölüm tamamla',        target: 20, reward: 400 },
-  { id: 'time_3',   label: '3 Zamana Karşı modu oyna', target: 3, reward: 250 },
-  { id: 'online_5', label: '5 çevrimiçi maç yap',     target: 5,  reward: 500 },
-];
+// ── DAILY QUESTS CONFIG (Moved to data/quests.ts) ─────────
 
 const QuestsScreen = () => {
   const { user, setView, claimDailyLogin, claimPlaytimeReward } = useUserStore();
@@ -941,6 +1282,9 @@ const QuestsScreen = () => {
   const nextMilestone = lastClaimed + INTERVAL;
   const playtimeToGo = Math.max(0, nextMilestone - totalPlaytime);
 
+  const dailyQuestsList = getDailyQuests(user.uid, today);
+  const weeklyQuestsList = getWeeklyQuests(user.uid, weekStart);
+
   const dailyProgress = user.dailyQuestsDate === today ? (user.dailyQuestsProgress || {}) : {};
   const weeklyProgress = user.weeklyQuestsDate === weekStart ? (user.weeklyQuestsProgress || {}) : {};
 
@@ -969,7 +1313,7 @@ const QuestsScreen = () => {
   const fmtTime = (s: number) => `${Math.floor(s / 60)}d ${s % 60}s`;
 
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white pb-28 overflow-y-auto scrollbar-hide">
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-textMain pb-28 overflow-y-auto scrollbar-hide">
       <div className="flex items-center gap-4 mb-6">
         <h2 className="text-3xl font-display font-black">Görevler</h2>
       </div>
@@ -983,7 +1327,7 @@ const QuestsScreen = () => {
               <Flame className={`w-7 h-7 ${canClaimLogin ? 'text-orange-400' : 'text-textMuted'}`} />
             </div>
             <div>
-              <p className="font-bold text-white">Giriş #{loginStreak + (canClaimLogin ? 1 : 0)}</p>
+              <p className="font-bold text-textMain">Giriş #{loginStreak + (canClaimLogin ? 1 : 0)}</p>
               <p className="text-textMuted text-xs">
                 {canClaimLogin ? `+${nextLoginReward} altın kazanacaksın` : 'Bugün zaten toplandı'}
               </p>
@@ -998,7 +1342,7 @@ const QuestsScreen = () => {
             disabled={!canClaimLogin || isClaiming}
             className={`neo-button px-5 py-3 font-black rounded-xl flex items-center justify-center gap-2 text-sm min-w-[80px] transition-all ${
               canClaimLogin
-                ? 'bg-orange-500 text-white shadow-[0_5px_20px_rgba(249,115,22,0.3)]'
+                ? 'bg-orange-500 text-textMain shadow-[0_5px_20px_rgba(249,115,22,0.3)]'
                 : 'bg-white/5 text-textMuted cursor-not-allowed'
             }`}
           >
@@ -1017,7 +1361,7 @@ const QuestsScreen = () => {
               <Clock className={`w-7 h-7 ${canClaimPlaytime ? 'text-blue-400' : 'text-textMuted'}`} />
             </div>
             <div>
-              <p className="font-bold text-white">Her 10 Dakika = 100 Altın</p>
+              <p className="font-bold text-textMain">Her 10 Dakika = 100 Altın</p>
               <p className="text-textMuted text-xs">
                 {canClaimPlaytime
                   ? `${unclaimed}x ödül hazır!`
@@ -1033,7 +1377,7 @@ const QuestsScreen = () => {
             disabled={!canClaimPlaytime || isClaiming}
             className={`neo-button px-5 py-3 font-black rounded-xl flex flex-col items-center gap-1 text-sm min-w-[80px] transition-all ${
               canClaimPlaytime
-                ? 'bg-blue-500 text-white shadow-[0_5px_20px_rgba(59,130,246,0.3)]'
+                ? 'bg-blue-500 text-textMain shadow-[0_5px_20px_rgba(59,130,246,0.3)]'
                 : 'bg-white/5 text-textMuted cursor-not-allowed'
             }`}
           >
@@ -1047,8 +1391,12 @@ const QuestsScreen = () => {
       <div className="mb-6">
         <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Günlük Görevler</h3>
         <div className="space-y-3">
-          {DAILY_QUESTS.map((q) => {
-            const prog = Math.min(q.target, dailyProgress[q.id] || 0);
+          {dailyQuestsList.map((q) => {
+            const progInfo = dailyProgress[q.id] || { count: 0, claimed: false };
+            const progCount = typeof progInfo === 'number' ? progInfo : progInfo.count;
+            const claimed = typeof progInfo === 'number' ? false : progInfo.claimed;
+
+            const prog = Math.min(q.target, progCount || 0);
             const done = prog >= q.target;
             return (
               <div key={q.id} className={`bg-surface border ${done ? 'border-primary/30' : 'border-white/5'} p-4 rounded-2xl flex items-center gap-4`}>
@@ -1056,7 +1404,7 @@ const QuestsScreen = () => {
                   {done ? <Check className="w-5 h-5 text-primary" /> : <Target className="w-5 h-5 text-textMuted" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-white text-sm">{q.label}</p>
+                  <p className="font-bold text-textMain text-sm">{q.label}</p>
                   <div className="w-full bg-white/5 rounded-full h-1.5 mt-1.5">
                     <div
                       className={`h-1.5 rounded-full transition-all ${done ? 'bg-primary' : 'bg-white/30'}`}
@@ -1065,8 +1413,25 @@ const QuestsScreen = () => {
                   </div>
                   <p className="text-textMuted text-[10px] mt-1">{prog}/{q.target}</p>
                 </div>
-                <div className="flex-shrink-0 flex items-center gap-1 text-yellow-400 font-black text-sm">
-                  <Coins className="w-4 h-4" /> {q.reward}
+                <div className="flex-shrink-0 flex flex-col items-center gap-1.5 min-w-[60px]">
+                  <div className="flex items-center gap-1 text-yellow-400 font-black text-sm">
+                    <Coins className="w-4 h-4" /> {q.reward}
+                  </div>
+                  {done && !claimed && (
+                    <button
+                      onClick={() => {
+                         playClick();
+                         useUserStore.getState().claimQuestReward(q.id, false, q.reward);
+                         playSuccess();
+                      }}
+                      className="px-3 py-1 bg-yellow-500/20 text-yellow-500 text-[10px] font-black uppercase rounded-lg border border-yellow-500/30 hover:bg-yellow-500/30 active:scale-95 transition-all w-full"
+                    >
+                      Al
+                    </button>
+                  )}
+                  {claimed && (
+                     <span className="text-primary text-[10px] font-bold uppercase w-full text-center">Alındı</span>
+                  )}
                 </div>
               </div>
             );
@@ -1078,8 +1443,12 @@ const QuestsScreen = () => {
       <div className="mb-6">
         <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Haftalık Görevler</h3>
         <div className="space-y-3">
-          {WEEKLY_QUESTS.map((q) => {
-            const prog = Math.min(q.target, weeklyProgress[q.id] || 0);
+          {weeklyQuestsList.map((q) => {
+            const progInfo = weeklyProgress[q.id] || { count: 0, claimed: false };
+            const progCount = typeof progInfo === 'number' ? progInfo : progInfo.count;
+            const claimed = typeof progInfo === 'number' ? false : progInfo.claimed;
+
+            const prog = Math.min(q.target, progCount || 0);
             const done = prog >= q.target;
             return (
               <div key={q.id} className={`bg-surface border ${done ? 'border-purple-500/30' : 'border-white/5'} p-4 rounded-2xl flex items-center gap-4`}>
@@ -1087,7 +1456,7 @@ const QuestsScreen = () => {
                   {done ? <Check className="w-5 h-5 text-purple-400" /> : <Star className="w-5 h-5 text-textMuted" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-white text-sm">{q.label}</p>
+                  <p className="font-bold text-textMain text-sm">{q.label}</p>
                   <div className="w-full bg-white/5 rounded-full h-1.5 mt-1.5">
                     <div
                       className={`h-1.5 rounded-full transition-all ${done ? 'bg-purple-500' : 'bg-white/30'}`}
@@ -1096,8 +1465,25 @@ const QuestsScreen = () => {
                   </div>
                   <p className="text-textMuted text-[10px] mt-1">{prog}/{q.target}</p>
                 </div>
-                <div className="flex-shrink-0 flex items-center gap-1 text-yellow-400 font-black text-sm">
-                  <Coins className="w-4 h-4" /> {q.reward}
+                <div className="flex-shrink-0 flex flex-col items-center gap-1.5 min-w-[60px]">
+                  <div className="flex items-center gap-1 text-yellow-400 font-black text-sm">
+                    <Coins className="w-4 h-4" /> {q.reward}
+                  </div>
+                  {done && !claimed && (
+                    <button
+                      onClick={() => {
+                         playClick();
+                         useUserStore.getState().claimQuestReward(q.id, true, q.reward);
+                         playSuccess();
+                      }}
+                      className="px-3 py-1 bg-yellow-500/20 text-yellow-500 text-[10px] font-black uppercase rounded-lg border border-yellow-500/30 hover:bg-yellow-500/30 active:scale-95 transition-all w-full"
+                    >
+                      Al
+                    </button>
+                  )}
+                  {claimed && (
+                     <span className="text-purple-400 text-[10px] font-bold uppercase w-full text-center">Alındı</span>
+                  )}
                 </div>
               </div>
             );
@@ -1124,14 +1510,14 @@ const VictoryScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-white/10 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-2xl relative z-10 overflow-hidden">
-        <h2 className="text-6xl font-display font-black text-white mb-2">BÖLÜM {level}</h2>
+        <h2 className="text-6xl font-display font-black text-textMain mb-2">BÖLÜM {level}</h2>
         {gameMode === 'duello' ? (
           <>
             <p className="text-danger font-bold tracking-widest text-sm mb-6">DÜELLO KAZANILDI</p>
             <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-6 flex flex-col items-center">
-              <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Kupa</p>
+              <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Rank Puanı</p>
               <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
-                +10 🏆
+                +15 🏆
               </p>
             </div>
             <p className="text-textMuted mb-8 leading-relaxed">Rakipten önce çözdün! Düellodan kupa kazandın.</p>
@@ -1174,7 +1560,7 @@ const VictoryScreen = () => {
         )}
         <button
           onClick={() => useUserStore.getState().setView('menu')}
-          className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-white"
+          className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-textMain"
         >
           Ana Menüye Dön
         </button>
@@ -1190,7 +1576,7 @@ const GameOverScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
-        <h2 className="text-4xl font-display font-black text-white mb-2">SÜRE BİTTİ</h2>
+        <h2 className="text-4xl font-display font-black text-textMain mb-2">SÜRE BİTTİ</h2>
         <p className="text-danger font-bold tracking-[0.2em] mb-6 text-sm">ZAMANA KARŞI MODU</p>
 
         <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
@@ -1210,7 +1596,7 @@ const GameOverScreen = () => {
         </button>
         <button
           onClick={() => setView('menu')}
-          className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-white"
+          className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-textMain"
         >
           Ana Menüye Dön
         </button>
@@ -1223,14 +1609,20 @@ const DuelloLostScreen = () => {
   const { setView } = useUserStore();
   const { opponent } = useGameStore();
 
+  useEffect(() => {
+     // Ensure we increment play_online on unmount or first enter if not fully hooked up in gameStore
+     // Actually, it's safer to just increment it when this screen opens
+     useUserStore.getState().updateQuestProgress('play_online');
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
         <h2 className="text-3xl font-display font-black text-danger mb-2 uppercase break-words w-full px-2">{opponent?.displayName ? opponent.displayName : 'RAKİP'}</h2>
-        <h3 className="text-2xl font-display font-black text-white mb-6">KAZANDI</h3>
+        <h3 className="text-2xl font-display font-black text-textMain mb-6">KAZANDI</h3>
 
         <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
-          <p className="text-2xl font-mono font-black text-danger/80 line-through">-5 Kupa 🏆</p>
+          <p className="text-2xl font-mono font-black text-danger/80 line-through">-10 Rank Puanı 🏆</p>
         </div>
 
         <button
@@ -1284,7 +1676,8 @@ const GameScreen = () => {
          if (data.status === 'finished') {
            if (data.winnerUid !== userUid && status === 'playing') {
               useGameStore.setState({ status: 'lost' });
-              useUserStore.getState().updateTrophies(-5);
+              useUserStore.getState().updateTrophies(-10); // Penalty for losing
+              useUserStore.getState().updateWinStreak(false);
               playError();
            }
          }
@@ -1316,7 +1709,11 @@ const GameScreen = () => {
            status: 'finished',
            winnerUid: userUid,
         }).catch(err => console.error(err));
-        useUserStore.getState().updateTrophies(10);
+        // Faster wins could reward more, but fixed 15 for now
+        const reward = 15;
+        // The store handles adding coins/quests
+        useUserStore.getState().updateTrophies(reward);
+        useUserStore.getState().updateWinStreak(true);
      }
   }, [status, gameMode, matchId, userUid]);
 
@@ -1347,7 +1744,7 @@ const GameScreen = () => {
                   gameMode === 'daily' ? 'Günün Sorusu' :
                   gameMode === 'duello' ? `Rakip ${opponentProgress} | Sen ${matchProgress} / ${boardSize * 2}` : 'Çevrimdışı'}
             </span>
-            <h1 className="text-2xl font-display font-black text-white">
+            <h1 className="text-2xl font-display font-black text-textMain">
               {gameMode === 'daily' ? 'Meydan Okuma' : gameMode === 'duello' ? '1v1 Düello' : `Bölüm ${level}`}
             </h1>
           </div>
@@ -1430,7 +1827,7 @@ export default function App() {
   });
 
   return (
-    <div className="w-full relative min-h-screen selection:bg-primary/30 overflow-hidden">
+    <div className="w-full relative h-[100dvh] selection:bg-primary/30 overflow-hidden">
       <div className="bg-ambient" />
       
       <AnimatePresence mode="wait">
@@ -1468,22 +1865,29 @@ const SettingsScreen = () => {
   const { soundEnabled, hapticsEnabled, language, toggleSound, toggleHaptics, setLanguage } = useSettingsStore();
 
   const handleThemeToggle = async () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const newTheme = isDark ? '' : 'dark';
+    // We treat empty string '' as Dark Mode (default).
+    // And 'theme_light' as Light Mode. 
+    // If it's something else like 'theme_neon', this toggle will switch back to dark mode if we treat it as "dark".
+    const current = document.documentElement.getAttribute('data-theme') || '';
+    const isDark = current !== 'theme_light'; // treat anything other than light as dark
+    const newTheme = isDark ? 'theme_light' : '';
     document.documentElement.setAttribute('data-theme', newTheme);
     
     if (user) {
       try {
+        const { updateDoc, doc } = await import('firebase/firestore');
         await updateDoc(doc(db, 'users', user.uid), {
           'equipped.theme': newTheme
         });
         useUserStore.setState({ user: { ...user, equipped: { ...user.equipped, theme: newTheme } } });
-      } catch(e) {}
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-white">
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt border border-white/5 neo-button shrink-0">
           <ArrowLeft className="w-6 h-6" />
@@ -1499,9 +1903,9 @@ const SettingsScreen = () => {
             <span className="font-display font-medium text-lg">Karanlık Mod (Dark)</span>
             <button
               onClick={handleThemeToggle}
-              className={`w-14 h-8 rounded-full transition-colors relative ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'bg-primary' : 'bg-surfaceAlt border border-white/10'}`}
+              className={`w-14 h-8 rounded-full transition-colors relative ${document.documentElement.getAttribute('data-theme') !== 'theme_light' ? 'bg-primary' : 'bg-surfaceAlt border border-white/10'}`}
             >
-              <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'translate-x-[26px]' : 'translate-x-1'}`} />
+              <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${document.documentElement.getAttribute('data-theme') !== 'theme_light' ? 'translate-x-[26px]' : 'translate-x-1'}`} />
             </button>
           </div>
         </div>
