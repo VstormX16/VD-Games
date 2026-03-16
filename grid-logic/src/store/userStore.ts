@@ -18,6 +18,10 @@ interface UserState {
   updateTrophies: (amount: number) => Promise<void>;
   buyItem: (itemId: string, cost: number) => Promise<boolean>;
   equipItem: (category: string, itemId: string) => Promise<void>;
+  claimDailyLogin: () => Promise<number>; // returns coins earned
+  claimPlaytimeReward: () => Promise<number>; // returns coins earned
+  incrementPlaytime: (seconds: number) => void;
+  updateQuestProgress: (questId: string, isWeekly: boolean) => Promise<void>;
   initializeAuth: () => void;
 }
 
@@ -42,8 +46,6 @@ export const useUserStore = create<UserState>((set, get) => ({
       if (userSnap.exists()) {
         profile = userSnap.data() as UserProfile;
         if (!profile.scores) {
-          // Migration
-          // Migration
           profile.scores = { easy: 0, medium: 0, hard: 0, progressive: profile.totalScore || 0, time_attack: 0, daily: 0 };
           profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1, time_attack: 1, daily: 1 };
         }
@@ -51,6 +53,9 @@ export const useUserStore = create<UserState>((set, get) => ({
         if (typeof profile.trophies !== 'number') profile.trophies = 0;
         if (!profile.inventory) profile.inventory = [];
         if (!profile.equipped) profile.equipped = {};
+        if (typeof profile.playtimeSeconds !== 'number') profile.playtimeSeconds = 0;
+        if (typeof profile.playtimeRewardClaimed !== 'number') profile.playtimeRewardClaimed = 0;
+        if (typeof profile.loginStreak !== 'number') profile.loginStreak = 0;
       } else {
         profile = {
           uid: user.uid,
@@ -192,6 +197,94 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  claimDailyLogin: async () => {
+    const { user } = get();
+    if (!user) return 0;
+
+    const today = new Date().toISOString().split('T')[0];
+    if (user.lastLoginDate === today) return 0; // Already claimed
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const newStreak = user.lastLoginDate === yesterday ? (user.loginStreak || 0) + 1 : 1;
+    
+    // Base reward = 50 coins + 10 per streak (up to 200)
+    const reward = Math.min(200, 50 + newStreak * 10);
+    const newCoins = (user.coins || 0) + reward;
+
+    const updatedUser = { ...user, coins: newCoins, lastLoginDate: today, loginStreak: newStreak };
+    set({ user: updatedUser });
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { coins: newCoins, lastLoginDate: today, loginStreak: newStreak });
+    } catch (e) {
+      console.error(e);
+    }
+    return reward;
+  },
+
+  incrementPlaytime: (seconds: number) => {
+    const { user } = get();
+    if (!user) return;
+    const newPlaytime = (user.playtimeSeconds || 0) + seconds;
+    set({ user: { ...user, playtimeSeconds: newPlaytime } });
+  },
+
+  claimPlaytimeReward: async () => {
+    const { user } = get();
+    if (!user) return 0;
+
+    const totalSeconds = user.playtimeSeconds || 0;
+    const lastClaimed = user.playtimeRewardClaimed || 0;
+    const REWARD_INTERVAL = 600; // 10 minutes
+    const unclaimed = Math.floor((totalSeconds - lastClaimed) / REWARD_INTERVAL);
+    if (unclaimed <= 0) return 0;
+
+    const reward = unclaimed * 100;
+    const newCoins = (user.coins || 0) + reward;
+    const newClaimed = lastClaimed + unclaimed * REWARD_INTERVAL;
+    const updatedUser = { ...user, coins: newCoins, playtimeRewardClaimed: newClaimed };
+    set({ user: updatedUser });
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { coins: newCoins, playtimeRewardClaimed: newClaimed });
+    } catch (e) {
+      console.error(e);
+    }
+    return reward;
+  },
+
+  updateQuestProgress: async (questId: string, isWeekly: boolean) => {
+    const { user } = get();
+    if (!user) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const weekStart = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - d.getDay());
+      return d.toISOString().split('T')[0];
+    })();
+
+    if (isWeekly) {
+      const progress = user.weeklyQuestsDate === weekStart ? { ...(user.weeklyQuestsProgress || {}) } : {};
+      progress[questId] = (progress[questId] || 0) + 1;
+      const updated = { ...user, weeklyQuestsDate: weekStart, weeklyQuestsProgress: progress };
+      set({ user: updated });
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { weeklyQuestsDate: weekStart, weeklyQuestsProgress: progress });
+      } catch (e) { console.error(e); }
+    } else {
+      const progress = user.dailyQuestsDate === today ? { ...(user.dailyQuestsProgress || {}) } : {};
+      progress[questId] = (progress[questId] || 0) + 1;
+      const updated = { ...user, dailyQuestsDate: today, dailyQuestsProgress: progress };
+      set({ user: updated });
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { dailyQuestsDate: today, dailyQuestsProgress: progress });
+      } catch (e) { console.error(e); }
+    }
+  },
+
   initializeAuth: () => {
     onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
@@ -207,6 +300,9 @@ export const useUserStore = create<UserState>((set, get) => ({
           if (typeof ud.trophies !== 'number') ud.trophies = 0;
           if (!ud.inventory) ud.inventory = [];
           if (!ud.equipped) ud.equipped = {};
+          if (typeof ud.playtimeSeconds !== 'number') ud.playtimeSeconds = 0;
+          if (typeof ud.playtimeRewardClaimed !== 'number') ud.playtimeRewardClaimed = 0;
+          if (typeof ud.loginStreak !== 'number') ud.loginStreak = 0;
           set({ user: ud, loading: false });
         } else {
           set({ user: null, loading: false }); // Failsafe

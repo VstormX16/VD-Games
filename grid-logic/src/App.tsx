@@ -4,8 +4,9 @@ import { useGameStore } from './store/gameStore';
 import { useUserStore } from './store/userStore';
 import { Grid } from './components/Grid';
 import {
-  Play, RotateCcw, Lightbulb, Hexagon,
-  Wifi, Target, User as UserIcon, LogOut, Medal, ArrowLeft, Clock, Flame, BookOpen, Lock, ShoppingBag, Coins, Settings, Swords
+  Play, RotateCcw, Lightbulb,
+  Wifi, Target, User as UserIcon, LogOut, ArrowLeft, Clock, Flame, Lock, Coins, Settings, Swords,
+  Pencil, Check, X, Ghost, Sword, Shield, Crown, Zap, Heart, Star, Tv
 } from 'lucide-react';
 import { collection, query, orderBy, limit, getDocs, doc, setDoc, updateDoc, onSnapshot, where, getDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -14,6 +15,8 @@ import { initAudio, playClick, triggerHapticPop, playSuccess, playError } from '
 import confetti from 'canvas-confetti';
 import { useSettingsStore } from './store/settingsStore';
 import { useTranslation } from './utils/i18n';
+import { BottomNav } from './components/BottomNav';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const MainMenu = () => {
   const { startLevel } = useGameStore();
@@ -60,13 +63,18 @@ const MainMenu = () => {
     <div className="flex flex-col h-[100dvh] overflow-hidden w-full relative z-10 text-white animate-fade-in pt-safe pb-safe">
       {/* Top Bar for Coins and Settings */}
       <header className="w-full flex justify-between items-center px-6 pt-6 pb-2 z-20 max-w-md mx-auto relative">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.9 }}
           onClick={() => setView('settings')}
           className="p-2.5 bg-surface/80 backdrop-blur-md rounded-xl hover:bg-surfaceAlt border border-white/5 neo-button hover:rotate-90 transition-all duration-300 shadow-lg"
         >
           <Settings className="w-5 h-5 text-textMuted hover:text-white" />
-        </button>
-        <div className="flex items-center gap-4 bg-surface/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/5 shadow-lg">
+        </motion.button>
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex items-center gap-4 bg-surface/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/5 shadow-lg"
+        >
           <div className="flex items-center gap-1.5 text-yellow-500 font-bold font-mono text-sm">
             <Coins className="w-4 h-4" />
             {user?.coins || 0}
@@ -75,20 +83,24 @@ const MainMenu = () => {
           <div className="flex items-center gap-1.5 text-yellow-500 font-bold font-mono text-sm">
             🏆 {user?.trophies || 0}
           </div>
-        </div>
+        </motion.div>
       </header>
 
       <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-md mx-auto relative mb-16">
         <div className="w-80 h-80 bg-primary opacity-[0.05] rounded-full blur-3xl absolute top-1/4 -translate-y-1/2 pointer-events-none" />
 
         <div className="text-center flex flex-col items-center w-full relative mb-8">
-          <div className="relative mb-6 group">
+          <motion.div 
+            animate={{ y: [0, -10, 0] }} 
+            transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+            className="relative mb-6 group"
+          >
             <div className="absolute inset-0 bg-primary opacity-20 blur-xl rounded-full scale-150 transition-transform group-hover:scale-125 duration-1000" />
             <div className="w-24 h-24 bg-surface rounded-[2rem] border border-white/10 flex items-center justify-center shadow-2xl relative z-10 rotate-3">
-              <Hexagon size={48} className="text-primary -rotate-3" strokeWidth={1.5} />
+              <img src="/logo.svg" alt="VD-Games Logo" className="w-16 h-16 object-contain -rotate-3 drop-shadow-lg" />
               <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/20 to-transparent rounded-b-[2rem]" />
             </div>
-          </div>
+          </motion.div>
 
           <h1 className="text-5xl font-display font-black mb-2 tracking-tight drop-shadow-md">
             VD-Games
@@ -99,15 +111,17 @@ const MainMenu = () => {
         </div>
 
         <div className="w-full flex flex-col gap-4">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => setSelectedMode('offline')}
             className="neo-button w-full py-5 bg-surface text-textMain font-display font-bold text-lg rounded-2xl shadow-xl flex items-center justify-center gap-3 border border-white/5 hover:bg-surfaceAlt"
           >
             <Target className="w-6 h-6 text-textMuted" />
             {t('play_offline')}
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => {
               if (user) {
                 playClick();
@@ -120,9 +134,10 @@ const MainMenu = () => {
           >
             <Swords className="w-6 h-6" />
             1v1 Düello
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => {
               if (user) {
                 setSelectedMode('online');
@@ -134,10 +149,11 @@ const MainMenu = () => {
           >
             <Wifi className="w-6 h-6" />
             {t('play_online')}
-          </button>
+          </motion.button>
 
           <div className="flex gap-4 w-full">
-            <button
+            <motion.button
+              whileTap={{ scale: 0.95 }}
               onClick={() => {
                 if (user) {
                   initAudio();
@@ -151,9 +167,10 @@ const MainMenu = () => {
             >
               <Clock className="w-6 h-6 mb-1" />
               <span className="text-xs uppercase tracking-wider text-center">{t('time_attack')}</span>
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.95 }}
               onClick={() => {
                 if (user) {
                   initAudio();
@@ -167,49 +184,7 @@ const MainMenu = () => {
             >
               <Flame className="w-6 h-6 mb-1" />
               <span className="text-xs uppercase tracking-wider text-center">{t('daily_challenge')}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Sticky Navigation */}
-      <div className="absolute inset-x-0 bottom-6 z-30 flex justify-center w-full px-6">
-        <div className="w-full max-w-sm">
-          <div className="glass-header rounded-[2rem] p-1.5 flex items-center justify-between border border-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] bg-surface/40 backdrop-blur-xl">
-            <button
-              onClick={() => setView('guide')}
-              className="neo-button flex-1 py-3 flex flex-col items-center gap-1.5 text-textMuted hover:text-white rounded-[1.5rem] hover:bg-white/5 transition-all"
-            >
-              <BookOpen className="w-5 h-5" strokeWidth={2.5} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">{t('guide')}</span>
-            </button>
-            <button
-              onClick={() => setView('leaderboard')}
-              className="neo-button flex-1 py-3 flex flex-col items-center gap-1.5 text-textMuted hover:text-white rounded-[1.5rem] hover:bg-white/5 transition-all"
-            >
-              <Medal className="w-5 h-5" strokeWidth={2.5} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">{t('leaderboard')}</span>
-            </button>
-            <button
-              onClick={() => {
-                if (user) setView('shop');
-                else setView('auth');
-              }}
-              className="neo-button flex-1 py-3 flex flex-col items-center gap-1.5 text-textMuted hover:text-yellow-400 rounded-[1.5rem] hover:bg-yellow-500/10 transition-all"
-            >
-              <ShoppingBag className="w-5 h-5" strokeWidth={2.5} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">{t('shop')}</span>
-            </button>
-            <button
-              onClick={() => {
-                if (user) setView('profile');
-                else setView('auth');
-              }}
-              className="neo-button flex-1 py-3 flex flex-col items-center gap-1.5 text-textMuted hover:text-primary rounded-[1.5rem] hover:bg-primary/10 transition-all"
-            >
-              <UserIcon className="w-5 h-5" strokeWidth={2.5} />
-              <span className="text-[10px] font-bold uppercase tracking-widest">{user ? t('profile') : t('login')}</span>
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>
@@ -355,26 +330,24 @@ const AuthScreen = () => {
 };
 
 const LeaderboardScreen = () => {
-  const { setView } = useUserStore();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [leaders, setLeaders] = useState<any[]>([]);
+  const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Difficulty | 'trophies'>('trophies');
+  const [activeTab, setActiveTab] = useState<'progressive' | 'hard' | 'time_attack' | 'trophies'>('progressive');
 
   useEffect(() => {
     const fetchLeaders = async () => {
       setLoading(true);
       try {
-        const usersRef = collection(db, 'users');
-        const q = activeTab === 'trophies'
-          ? query(usersRef, orderBy('trophies', 'desc'), limit(10))
-          : query(usersRef, orderBy(`scores.${activeTab}`, 'desc'), limit(10));
-          
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLeaders(data);
+        const orderField = activeTab === 'trophies' ? 'trophies' : `scores.${activeTab}`;
+        const q = query(
+          collection(db, 'users'),
+          orderBy(orderField, 'desc'),
+          limit(20)
+        );
+        const snap = await getDocs(q);
+        setLeaders(snap.docs.map(d => ({ id: d.id, ...d.data() })) as any);
       } catch (error) {
-        console.error("Error fetching leaderboard", error);
+        console.error("Error fetching leaders:", error);
       } finally {
         setLoading(false);
       }
@@ -383,11 +356,8 @@ const LeaderboardScreen = () => {
   }, [activeTab]);
 
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white">
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white overflow-y-auto pb-24 scrollbar-hide">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button border border-white/5">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
         <h2 className="text-3xl font-display font-black">Liderlik Tablosu</h2>
       </div>
 
@@ -395,13 +365,12 @@ const LeaderboardScreen = () => {
         {[
           { id: 'trophies', label: 'Kupa 🏆' },
           { id: 'progressive', label: 'İlerlemeli' },
-          { id: 'easy', label: 'Kolay' },
-          { id: 'medium', label: 'Orta' },
+          { id: 'time_attack', label: 'Zamana Karşı' },
           { id: 'hard', label: 'Zor' }
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as Difficulty | 'trophies')}
+            onClick={() => setActiveTab(tab.id as 'progressive' | 'hard' | 'time_attack' | 'trophies')}
             className={clsx(
               "px-4 py-2 font-bold font-display rounded-xl whitespace-nowrap transition-colors border border-white/5",
               activeTab === tab.id ? "bg-primary text-white" : "bg-surface text-textMuted hover:bg-surfaceAlt"
@@ -418,10 +387,24 @@ const LeaderboardScreen = () => {
         ) : leaders.length === 0 ? (
           <div className="p-8 text-center text-textMuted">Henüz kimse skor yapmadı!</div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <motion.div 
+            initial="hidden" animate="show"
+            variants={{
+              hidden: {},
+              show: { transition: { staggerChildren: 0.1 } }
+            }}
+            className="flex flex-col gap-2"
+          >
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {leaders.map((u: any, i) => (
-              <div key={u.id} className="bg-surface p-4 rounded-2xl flex items-center justify-between border border-white/5">
+              <motion.div 
+                key={u.id} 
+                variants={{
+                  hidden: { opacity: 0, y: 20 },
+                  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+                }}
+                className="bg-surface p-4 rounded-2xl flex items-center justify-between border border-white/5"
+              >
                 <div className="flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500/20 text-yellow-500' :
                       i === 1 ? 'bg-gray-400/20 text-gray-400' :
@@ -438,9 +421,9 @@ const LeaderboardScreen = () => {
                   {activeTab === 'trophies' ? (u.trophies || 0) : (u.scores?.[activeTab] || 0)}
                   {activeTab === 'trophies' && <span className="text-yellow-500 text-sm">🏆</span>}
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
@@ -448,14 +431,9 @@ const LeaderboardScreen = () => {
 };
 
 const GuideScreen = () => {
-  const { setView } = useUserStore();
-
   return (
     <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-white overflow-y-auto pb-12">
       <div className="flex items-center gap-4 mb-8 sticky top-0 py-2 bg-bgStart/90 backdrop-blur z-20">
-        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button border border-white/5 shrink-0">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
         <h2 className="text-3xl font-display font-black leading-none">Nasıl Oynanır?</h2>
       </div>
 
@@ -527,76 +505,35 @@ const GuideScreen = () => {
 
 const ShopScreen = () => {
   const { user, setView } = useUserStore();
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<{coins: number, price: string, name: string} | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-
-  // Form states for the mock checkout
-  const [cardName, setCardName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
+  const [isWatchingAd, setIsWatchingAd] = useState(false);
 
   if (!user) {
     setView('menu');
     return null;
   }
 
-  const coinPackages = [
-    { name: "Başlangıç Paketi", coins: 500, price: "19.90", popular: false },
-    { name: "Uzman Paketi", coins: 1500, price: "49.90", popular: true },
-    { name: "Efsanevi Kasa", coins: 5000, price: "149.90", popular: false },
-  ];
-
-  const handleBuyClick = (pkg: {coins: number, price: string, name: string}) => {
-    playClick();
-    setSelectedPackage(pkg);
-    setIsCheckoutOpen(true);
-    setPaymentSuccess(false);
-    // Reset forms
-    setCardName(''); 
-    setCardNumber('');
-    setExpiry('');
-    setCvv('');
-  };
-
-  const processPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPackage) return;
-    
-    setIsProcessing(true);
+  const handleWatchAd = async () => {
+    if (isWatchingAd) return;
+    setIsWatchingAd(true);
     playClick();
 
-    // Simulate network request to PayTR API
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Simulate watching a 3 second Ad
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     try {
-      // Top up user's account in firebase
       const { doc, updateDoc, increment } = await import('firebase/firestore');
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
-        coins: increment(selectedPackage.coins)
+        coins: increment(250)
       });
       
-      // Update local state instantly
-      useUserStore.setState({ user: { ...user, coins: (user.coins || 0) + selectedPackage.coins } });
-      
-      setPaymentSuccess(true);
+      useUserStore.setState({ user: { ...user, coins: (user.coins || 0) + 250 } });
       playSuccess();
-      
-      // Close modal after showing success message
-      setTimeout(() => {
-        setIsCheckoutOpen(false);
-        setIsProcessing(false);
-        setSelectedPackage(null);
-      }, 2000);
-
     } catch (error) {
-      console.error("Payment failed", error);
-      setIsProcessing(false);
+      console.error("Ad reward failed", error);
       playError();
-      alert("Ödeme sırasında bir hata oluştu.");
+    } finally {
+      setIsWatchingAd(false);
     }
   };
 
@@ -607,9 +544,6 @@ const ShopScreen = () => {
       <header className="sticky top-0 z-20 w-full bg-bgStart/80 backdrop-blur-md border-b border-white/5">
         <div className="w-full max-w-md mx-auto flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
-            <button onClick={() => setView('menu')} className="p-2.5 bg-surface rounded-xl hover:bg-surfaceAlt neo-button border border-white/5 shrink-0">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
             <h2 className="text-2xl font-display font-black leading-none">Mağaza</h2>
           </div>
           <div className="flex items-center gap-2 bg-yellow-500/10 text-yellow-500 px-3 py-1.5 rounded-full border border-yellow-500/20 font-bold font-mono text-sm shadow-sm">
@@ -622,33 +556,32 @@ const ShopScreen = () => {
       {/* Content wrapper */}
       <div className="w-full max-w-md mx-auto px-6 pt-6 space-y-8">
         <div>
-          <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-4 px-2">Altın Paketleri (Gerçek Para)</h3>
-          <div className="grid grid-cols-1 gap-4">
-            {coinPackages.map((pkg, idx) => (
-              <div key={idx} className={`bg-surface p-5 rounded-3xl border ${pkg.popular ? 'border-primary/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/5'} flex items-center justify-between relative`}>
-                {pkg.popular && (
-                  <div className="absolute -top-3 left-6 bg-primary text-bgStart text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
-                    En Popüler
-                  </div>
-                )}
-                <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${pkg.popular ? 'bg-yellow-500/20 border-yellow-500/50' : 'bg-white/5 border-white/10'}`}>
-                    <Coins className={`w-8 h-8 ${pkg.popular ? 'text-yellow-400' : 'text-yellow-500/70'}`} />
-                  </div>
-                  <div className="flex flex-col">
-                     <span className="font-display font-black text-2xl text-yellow-400">{pkg.coins}</span>
-                     <span className="text-textMuted text-xs">{pkg.name}</span>
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={() => handleBuyClick(pkg)}
-                  className="neo-button px-5 py-3 bg-white text-bgStart font-black rounded-xl hover:bg-gray-200 transition-colors"
-                >
-                  {pkg.price} ₺
-                </button>
-              </div>
-            ))}
+          <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-4 px-2">Ücretsiz Altın Kazan</h3>
+          
+          <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/5 border border-yellow-500/30 p-6 rounded-[2rem] relative overflow-hidden flex flex-col items-center justify-center text-center shadow-[0_0_30px_rgba(234,179,8,0.15)]">
+            <div className="w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(250,204,21,0.5)]">
+              <Tv className="w-8 h-8 text-black" fill="currentColor" />
+            </div>
+            <h3 className="font-display font-black text-2xl text-white mb-2">Ödüllü Reklam İzle</h3>
+            <p className="text-yellow-100/70 text-sm mb-6 max-w-[200px]">30 saniyelik kısa bir reklam izleyerek anında bedava altın kazan.</p>
+            
+            <button 
+              onClick={handleWatchAd}
+              disabled={isWatchingAd}
+              className="neo-button w-full py-4 bg-yellow-400 text-black font-black font-display text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:bg-yellow-300 disabled:opacity-50 transition-all"
+            >
+              {isWatchingAd ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Reklam Yükleniyor...
+                </>
+              ) : (
+                <>
+                  <Play className="w-5 h-5" fill="currentColor" />
+                  İzle ve Kazan (+250)
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -754,170 +687,146 @@ const ShopScreen = () => {
               )}
             </div>
 
+            {/* Theme: Siberpunk */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-yellow-400/20 flex items-center justify-center border border-yellow-400/30">
+                  <div className="w-8 h-8 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-white">Siberpunk</h3>
+                  <p className="text-textMuted text-xs">Arayüzü neon sarı cyberpunk stiline sokar.</p>
+                </div>
+              </div>
+              
+              {!user.inventory?.includes('theme_cyberpunk') ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('theme_cyberpunk', 5000);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 5000</span>
+                 </button>
+              ) : (
+                <button onClick={() => {
+                  playClick();
+                  useUserStore.getState().equipItem('theme', 'theme_cyberpunk');
+                }} className={`neo-button px-4 py-3 ${user.equipped?.theme === 'theme_cyberpunk' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-white/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.theme === 'theme_cyberpunk' ? 'Kullanılıyor' : 'Kullan'}</span>
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
-
-      {/* Mock PayTR Checkout Modal */}
-      {isCheckoutOpen && selectedPackage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-md animate-fade-in">
-          <div className="bg-white text-gray-900 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative overflow-hidden animate-slide-up">
-            
-            {/* PayTR Header */}
-            <div className="flex items-center justify-between border-b pb-4 mb-4">
-               <div>
-                 <p className="text-xs text-gray-500 font-medium">Güvenli Ödeme</p>
-                 <div className="flex items-center gap-1">
-                   <Lock className="w-3 h-3 text-green-600" />
-                   <p className="font-bold text-lg text-gray-800">PayTR.</p>
-                 </div>
-               </div>
-               <div className="text-right">
-                 <p className="text-xs text-gray-500 font-medium">Ödenecek Tutar</p>
-                 <p className="font-black text-xl text-blue-600">{selectedPackage.price} TL</p>
-               </div>
-            </div>
-
-            {paymentSuccess ? (
-              <div className="py-10 flex flex-col items-center justify-center animate-fade-in text-center">
-                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                   <div className="w-8 h-8 rounded-full border-4 border-green-500 border-t-transparent animate-spin" style={{ animationIterationCount: 1, animationDuration: '0.5s' }} />
-                   <div className="absolute font-bold text-green-500 text-2xl">✓</div>
-                 </div>
-                 <h3 className="text-2xl font-black text-gray-900 mb-2">Ödeme Başarılı!</h3>
-                 <p className="text-gray-500">+{selectedPackage.coins} Altın hesabınıza eklendi.</p>
-              </div>
-            ) : (
-              <form onSubmit={processPayment} className="space-y-4">
-                <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-xl mb-4 border border-blue-100">
-                  <span className="font-bold">TEST MODU:</span> Bu simüle edilmiş bir ödeme ekranıdır. Lütfen rastgele sayılar giriniz. Gerçek para çekilmez.
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Kart Üzerindeki İsim</label>
-                  <input 
-                    type="text" required
-                    value={cardName} onChange={e => setCardName(e.target.value)}
-                    placeholder="Ad Soyad"
-                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all font-medium placeholder:text-gray-400"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Kart Numarası</label>
-                  <input 
-                    type="text" required maxLength={19}
-                    value={cardNumber} onChange={e => setCardNumber(e.target.value.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim())}
-                    placeholder="0000 0000 0000 0000"
-                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all font-mono placeholder:text-gray-400"
-                  />
-                </div>
-
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Son Kulla. (AA/YY)</label>
-                    <input 
-                      type="text" required maxLength={5}
-                      value={expiry} onChange={e => setExpiry(e.target.value.replace(/\D/g, '').replace(/(\d{2})(\d{1,2})/, '$1/$2').trim())}
-                      placeholder="MM/YY"
-                      className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all font-mono placeholder:text-gray-400"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">CVV</label>
-                    <input 
-                      type="text" required maxLength={3}
-                      value={cvv} onChange={e => setCvv(e.target.value.replace(/\D/g, ''))}
-                      placeholder="123"
-                      className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all font-mono placeholder:text-gray-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => setIsCheckoutOpen(false)}
-                    disabled={isProcessing}
-                    className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    İptal
-                  </button>
-                  <button 
-                    type="submit"
-                    disabled={isProcessing}
-                    className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-[0_5px_15px_rgba(37,99,235,0.3)] transition-all disabled:opacity-70 flex items-center justify-center gap-2"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        İşleniyor...
-                      </>
-                    ) : (
-                      `Onayla ve Öde`
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-            
-            {/* PayTR Footer logos */}
-            <div className="flex justify-center gap-2 mt-6 border-t pt-4 opacity-50 grayscale">
-               <div className="h-6 w-10 bg-gray-200 rounded animate-pulse" />
-               <div className="h-6 w-10 bg-gray-200 rounded animate-pulse" />
-               <div className="h-6 w-10 bg-gray-200 rounded animate-pulse" />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
+const PREDEFINED_AVATARS = [
+  { id: 'UserIcon', icon: UserIcon, color: 'text-primary', bg: 'bg-primary/20' },
+  { id: 'Ghost', icon: Ghost, color: 'text-purple-400', bg: 'bg-purple-500/20' },
+  { id: 'Sword', icon: Sword, color: 'text-danger', bg: 'bg-danger/20' },
+  { id: 'Shield', icon: Shield, color: 'text-blue-400', bg: 'bg-blue-500/20' },
+  { id: 'Crown', icon: Crown, color: 'text-yellow-400', bg: 'bg-yellow-500/20' },
+  { id: 'Zap', icon: Zap, color: 'text-orange-400', bg: 'bg-orange-500/20' },
+  { id: 'Heart', icon: Heart, color: 'text-pink-400', bg: 'bg-pink-500/20' },
+  { id: 'Star', icon: Star, color: 'text-yellow-300', bg: 'bg-yellow-400/20' },
+];
+
 const ProfileScreen = () => {
   const { user, logout, setView } = useUserStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(user?.displayName || '');
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   if (!user) {
     setView('menu');
     return null;
   }
 
+  const handleSaveName = async () => {
+    const newName = editName.trim();
+    if (newName && newName !== user.displayName) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { displayName: newName });
+        useUserStore.setState({ user: { ...user, displayName: newName } });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    setIsEditing(false);
+  };
+
+  const currentAvatarId = user.photoURL?.startsWith('icon:') ? user.photoURL.split(':')[1] : 'UserIcon';
+  const CurrentIconObj = PREDEFINED_AVATARS.find(a => a.id === currentAvatarId) || PREDEFINED_AVATARS[0];
+  const CurrentIcon = CurrentIconObj.icon;
+
+  const handleSelectAvatar = async (id: string) => {
+    const photoURL = `icon:${id}`;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { photoURL });
+      useUserStore.setState({ user: { ...user, photoURL } });
+    } catch (error) {
+      console.error(error);
+    }
+    setShowAvatarModal(false);
+  };
+
   return (
-    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white">
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => setView('menu')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt neo-button">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white pb-24">
+      <div className="flex items-center gap-4 mb-4">
         <h2 className="text-3xl font-display font-black">Profilim</h2>
       </div>
 
-      <div className="bg-surface border border-white/5 p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl mb-6">
-        {user.photoURL ? (
-          <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-surfaceAlt mb-4" />
-        ) : (
-          <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-            <UserIcon className="w-12 h-12 text-primary" />
+      <div className="bg-surface border border-white/5 p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl mb-6 relative">
+        <button 
+          onClick={() => setShowAvatarModal(true)}
+          className="relative group mb-6"
+        >
+          {user.photoURL && !user.photoURL.startsWith('icon:') ? (
+            <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-surfaceAlt object-cover" />
+          ) : (
+            <div className={`w-24 h-24 rounded-full ${CurrentIconObj.bg} flex items-center justify-center border-4 border-surfaceAlt transition-transform group-hover:scale-105`}>
+              <CurrentIcon className={`w-12 h-12 ${CurrentIconObj.color}`} strokeWidth={1.5} />
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 top-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Pencil className="w-6 h-6 text-white" />
           </div>
-        )}
+        </button>
 
-        <input
-          type="text"
-          defaultValue={user.displayName || 'İsimsiz Oyuncu'}
-          onBlur={async (e) => {
-            const newName = e.target.value.trim();
-            if (newName && newName !== user.displayName) {
-              try {
-                const { doc, updateDoc } = await import('firebase/firestore');
-                const userRef = doc(db, 'users', user.uid);
-                await updateDoc(userRef, { displayName: newName });
-                useUserStore.setState({ user: { ...user, displayName: newName } });
-              } catch (error) {
-                console.error(error);
-              }
-            }
-          }}
-          className="text-2xl font-bold font-display mb-1 bg-transparent border-b border-dashed border-textMuted/30 focus:border-primary text-center outline-none transition-colors w-full px-2 py-1"
-        />
+        <div className="w-full flex justify-center items-center mb-1 h-12">
+          {isEditing ? (
+            <div className="flex items-center gap-2 bg-bgStart border border-white/10 rounded-xl p-1 px-3 w-full">
+              <input
+                type="text"
+                autoFocus
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+                className="text-xl font-bold font-display bg-transparent text-white outline-none w-full text-center"
+              />
+              <button onClick={() => { setEditName(user.displayName || ''); setIsEditing(false); }} className="p-1.5 text-textMuted hover:text-danger hover:bg-white/5 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <button onClick={handleSaveName} className="p-1.5 text-primary hover:bg-primary/20 rounded-lg transition-colors">
+                <Check className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <h3 className="text-2xl font-bold font-display text-white">{user.displayName || 'İsimsiz Oyuncu'}</h3>
+              <button onClick={() => setIsEditing(true)} className="p-1.5 text-textMuted hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+        
         <p className="text-textMuted text-sm mb-6 mt-1">{user.email}</p>
 
         <div className="w-full grid grid-cols-2 gap-4">
@@ -949,6 +858,253 @@ const ProfileScreen = () => {
         <LogOut className="w-5 h-5" />
         Çıkış Yap
       </button>
+
+      {/* Avatar Selection Modal */}
+      <AnimatePresence>
+        {showAvatarModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="bg-surface border border-white/10 p-6 rounded-[2rem] w-full max-w-sm shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-display font-black">Avatar Seç</h3>
+                <button onClick={() => setShowAvatarModal(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
+                  <X className="w-5 h-5 text-textMuted hover:text-white" />
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-4">
+                {PREDEFINED_AVATARS.map((avatar) => (
+                  <button
+                    key={avatar.id}
+                    onClick={() => handleSelectAvatar(avatar.id)}
+                    className={`aspect-square rounded-2xl flex items-center justify-center border-2 transition-all hover:scale-105 ${
+                      currentAvatarId === avatar.id ? 'border-white bg-white/10' : 'border-transparent bg-bgStart hover:border-white/20'
+                    }`}
+                  >
+                    <avatar.icon className={`w-8 h-8 ${avatar.color}`} strokeWidth={1.5} />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ── DAILY QUESTS CONFIG ───────────────────────────────────
+const DAILY_QUESTS = [
+  { id: 'play_1',   label: 'Bir bölüm oyna',         target: 1,  reward: 50  },
+  { id: 'play_3',   label: 'Üç bölüm tamamla',        target: 3,  reward: 120 },
+  { id: 'daily_ch', label: 'Günlük modu oyna',        target: 1,  reward: 80  },
+];
+const WEEKLY_QUESTS = [
+  { id: 'play_20',  label: '20 bölüm tamamla',        target: 20, reward: 400 },
+  { id: 'time_3',   label: '3 Zamana Karşı modu oyna', target: 3, reward: 250 },
+  { id: 'online_5', label: '5 çevrimiçi maç yap',     target: 5,  reward: 500 },
+];
+
+const QuestsScreen = () => {
+  const { user, setView, claimDailyLogin, claimPlaytimeReward } = useUserStore();
+  const [dailyClaimed, setDailyClaimed] = useState(false);
+  const [dailyReward, setDailyReward] = useState(0);
+  const [playtimeClaimed, setPlaytimeClaimed] = useState(false);
+  const [playtimeReward, setPlaytimeReward] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
+
+  if (!user) {
+    setView('menu');
+    return null;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const weekStart = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().split('T')[0];
+  })();
+
+  const canClaimLogin = user.lastLoginDate !== today;
+  const loginStreak = user.loginStreak || 0;
+  const nextLoginReward = Math.min(200, 50 + (loginStreak + 1) * 10);
+
+  const totalPlaytime = user.playtimeSeconds || 0;
+  const lastClaimed = user.playtimeRewardClaimed || 0;
+  const INTERVAL = 600;
+  const unclaimed = Math.floor((totalPlaytime - lastClaimed) / INTERVAL);
+  const canClaimPlaytime = unclaimed > 0;
+  const nextMilestone = lastClaimed + INTERVAL;
+  const playtimeToGo = Math.max(0, nextMilestone - totalPlaytime);
+
+  const dailyProgress = user.dailyQuestsDate === today ? (user.dailyQuestsProgress || {}) : {};
+  const weeklyProgress = user.weeklyQuestsDate === weekStart ? (user.weeklyQuestsProgress || {}) : {};
+
+  const handleLoginClaim = async () => {
+    if (!canClaimLogin || isClaiming) return;
+    setIsClaiming(true);
+    playClick();
+    const earned = await claimDailyLogin();
+    setDailyReward(earned);
+    setDailyClaimed(true);
+    if (earned > 0) playSuccess();
+    setIsClaiming(false);
+  };
+
+  const handlePlaytimeClaim = async () => {
+    if (!canClaimPlaytime || isClaiming) return;
+    setIsClaiming(true);
+    playClick();
+    const earned = await claimPlaytimeReward();
+    setPlaytimeReward(earned);
+    setPlaytimeClaimed(true);
+    if (earned > 0) playSuccess();
+    setIsClaiming(false);
+  };
+
+  const fmtTime = (s: number) => `${Math.floor(s / 60)}d ${s % 60}s`;
+
+  return (
+    <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-white pb-28 overflow-y-auto scrollbar-hide">
+      <div className="flex items-center gap-4 mb-6">
+        <h2 className="text-3xl font-display font-black">Görevler</h2>
+      </div>
+
+      {/* Daily Login Reward */}
+      <div className="mb-6">
+        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Günlük Giriş Ödülü</h3>
+        <div className={`bg-gradient-to-br from-orange-500/20 to-orange-900/5 border ${canClaimLogin ? 'border-orange-500/40' : 'border-white/5'} p-5 rounded-[2rem] flex items-center justify-between gap-4 shadow-lg`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${canClaimLogin ? 'bg-orange-500/30' : 'bg-white/5'}`}>
+              <Flame className={`w-7 h-7 ${canClaimLogin ? 'text-orange-400' : 'text-textMuted'}`} />
+            </div>
+            <div>
+              <p className="font-bold text-white">Giriş #{loginStreak + (canClaimLogin ? 1 : 0)}</p>
+              <p className="text-textMuted text-xs">
+                {canClaimLogin ? `+${nextLoginReward} altın kazanacaksın` : 'Bugün zaten toplandı'}
+              </p>
+              {loginStreak > 0 && (
+                <p className="text-orange-400 text-[10px] font-bold mt-0.5">🔥 {loginStreak} günlük seri</p>
+              )}
+            </div>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={handleLoginClaim}
+            disabled={!canClaimLogin || isClaiming}
+            className={`neo-button px-5 py-3 font-black rounded-xl flex items-center justify-center gap-2 text-sm min-w-[80px] transition-all ${
+              canClaimLogin
+                ? 'bg-orange-500 text-white shadow-[0_5px_20px_rgba(249,115,22,0.3)]'
+                : 'bg-white/5 text-textMuted cursor-not-allowed'
+            }`}
+          >
+            {dailyClaimed ? <Check className="w-5 h-5 text-green-400" /> : canClaimLogin ? `Al` : `✓`}
+            {dailyClaimed && <span className="text-green-400 text-xs">+{dailyReward}</span>}
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Playtime Reward */}
+      <div className="mb-6">
+        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Oynama Ödülü</h3>
+        <div className={`bg-gradient-to-br from-blue-500/20 to-blue-900/5 border ${canClaimPlaytime ? 'border-blue-500/40' : 'border-white/5'} p-5 rounded-[2rem] flex items-center justify-between gap-4 shadow-lg`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${canClaimPlaytime ? 'bg-blue-500/30' : 'bg-white/5'}`}>
+              <Clock className={`w-7 h-7 ${canClaimPlaytime ? 'text-blue-400' : 'text-textMuted'}`} />
+            </div>
+            <div>
+              <p className="font-bold text-white">Her 10 Dakika = 100 Altın</p>
+              <p className="text-textMuted text-xs">
+                {canClaimPlaytime
+                  ? `${unclaimed}x ödül hazır!`
+                  : `Kalan: ~${fmtTime(playtimeToGo)}`
+                }
+              </p>
+              <p className="text-blue-400/70 text-[10px] mt-0.5">Toplam: {fmtTime(totalPlaytime)}</p>
+            </div>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={handlePlaytimeClaim}
+            disabled={!canClaimPlaytime || isClaiming}
+            className={`neo-button px-5 py-3 font-black rounded-xl flex flex-col items-center gap-1 text-sm min-w-[80px] transition-all ${
+              canClaimPlaytime
+                ? 'bg-blue-500 text-white shadow-[0_5px_20px_rgba(59,130,246,0.3)]'
+                : 'bg-white/5 text-textMuted cursor-not-allowed'
+            }`}
+          >
+            {playtimeClaimed ? <Check className="w-5 h-5 text-green-400" /> : 'Al'}
+            {playtimeClaimed && <span className="text-green-400 text-[10px]">+{playtimeReward}</span>}
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Daily Quests */}
+      <div className="mb-6">
+        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Günlük Görevler</h3>
+        <div className="space-y-3">
+          {DAILY_QUESTS.map((q) => {
+            const prog = Math.min(q.target, dailyProgress[q.id] || 0);
+            const done = prog >= q.target;
+            return (
+              <div key={q.id} className={`bg-surface border ${done ? 'border-primary/30' : 'border-white/5'} p-4 rounded-2xl flex items-center gap-4`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${done ? 'bg-primary/20' : 'bg-bgStart'}`}>
+                  {done ? <Check className="w-5 h-5 text-primary" /> : <Target className="w-5 h-5 text-textMuted" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-white text-sm">{q.label}</p>
+                  <div className="w-full bg-white/5 rounded-full h-1.5 mt-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all ${done ? 'bg-primary' : 'bg-white/30'}`}
+                      style={{ width: `${(prog / q.target) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-textMuted text-[10px] mt-1">{prog}/{q.target}</p>
+                </div>
+                <div className="flex-shrink-0 flex items-center gap-1 text-yellow-400 font-black text-sm">
+                  <Coins className="w-4 h-4" /> {q.reward}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Weekly Quests */}
+      <div className="mb-6">
+        <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Haftalık Görevler</h3>
+        <div className="space-y-3">
+          {WEEKLY_QUESTS.map((q) => {
+            const prog = Math.min(q.target, weeklyProgress[q.id] || 0);
+            const done = prog >= q.target;
+            return (
+              <div key={q.id} className={`bg-surface border ${done ? 'border-purple-500/30' : 'border-white/5'} p-4 rounded-2xl flex items-center gap-4`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${done ? 'bg-purple-500/20' : 'bg-bgStart'}`}>
+                  {done ? <Check className="w-5 h-5 text-purple-400" /> : <Star className="w-5 h-5 text-textMuted" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-white text-sm">{q.label}</p>
+                  <div className="w-full bg-white/5 rounded-full h-1.5 mt-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all ${done ? 'bg-purple-500' : 'bg-white/30'}`}
+                      style={{ width: `${(prog / q.target) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-textMuted text-[10px] mt-1">{prog}/{q.target}</p>
+                </div>
+                <div className="flex-shrink-0 flex items-center gap-1 text-yellow-400 font-black text-sm">
+                  <Coins className="w-4 h-4" /> {q.reward}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   );
 };
@@ -1250,30 +1406,81 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, []);
 
+  // Track playtime every 30 seconds while user is logged in
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      useUserStore.getState().incrementPlaytime(30);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.uid]);
+
   if (loading) {
     return <div className="min-h-screen bg-bgStart flex items-center justify-center text-primary font-display font-bold text-2xl animate-pulse">Yükleniyor...</div>;
   }
 
+  // Determine slide direction based on index to create a natural flow
+  const navOrder = ['quests', 'leaderboard', 'menu', 'shop', 'profile', 'settings', 'game', 'matchmaking', 'auth', 'guide'];
+  const viewIndex = navOrder.indexOf(currentView);
+
+  const getSlideVariants = () => ({
+    initial: { opacity: 0, x: 20 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -20 },
+  });
+
   return (
-    <div className="w-full relative min-h-screen selection:bg-primary/30">
+    <div className="w-full relative min-h-screen selection:bg-primary/30 overflow-hidden">
       <div className="bg-ambient" />
-      {currentView === 'menu' && <MainMenu />}
-      {currentView === 'auth' && <AuthScreen />}
-      {currentView === 'matchmaking' && <MatchmakingScreen />}
-      {currentView === 'game' && <GameScreen />}
-      {currentView === 'guide' && <GuideScreen />}
-      {currentView === 'shop' && <ShopScreen />}
-      {currentView === 'leaderboard' && <LeaderboardScreen />}
-      {currentView === 'profile' && <ProfileScreen />}
-      {currentView === 'settings' && <SettingsScreen />}
+      
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentView}
+          custom={viewIndex}
+          variants={getSlideVariants()}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={{ type: "tween", duration: 0.15, ease: "easeOut" }}
+          className="absolute inset-x-0 top-0 bottom-0"
+        >
+          {currentView === 'menu' && <MainMenu />}
+          {currentView === 'auth' && <AuthScreen />}
+          {currentView === 'matchmaking' && <MatchmakingScreen />}
+          {currentView === 'game' && <GameScreen />}
+          {currentView === 'guide' && <GuideScreen />}
+          {currentView === 'shop' && <ShopScreen />}
+          {currentView === 'leaderboard' && <LeaderboardScreen />}
+          {currentView === 'profile' && <ProfileScreen />}
+          {currentView === 'quests' && <QuestsScreen />}
+          {currentView === 'settings' && <SettingsScreen />}
+        </motion.div>
+      </AnimatePresence>
+      
+      <BottomNav />
     </div>
   );
 }
 
 const SettingsScreen = () => {
-  const { setView } = useUserStore();
+  const { setView, user } = useUserStore();
   const t = useTranslation();
   const { soundEnabled, hapticsEnabled, language, toggleSound, toggleHaptics, setLanguage } = useSettingsStore();
+
+  const handleThemeToggle = async () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const newTheme = isDark ? '' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          'equipped.theme': newTheme
+        });
+        useUserStore.setState({ user: { ...user, equipped: { ...user.equipped, theme: newTheme } } });
+      } catch(e) {}
+    }
+  };
 
   return (
     <div className="flex flex-col w-full min-h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-white">
@@ -1285,6 +1492,20 @@ const SettingsScreen = () => {
       </div>
 
       <div className="space-y-6">
+        <div className="bg-surface/50 border border-white/5 rounded-3xl p-6">
+          <h3 className="text-sm font-bold text-primary tracking-widest uppercase mb-6">Gorunum</h3>
+          
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-display font-medium text-lg">Karanlık Mod (Dark)</span>
+            <button
+              onClick={handleThemeToggle}
+              className={`w-14 h-8 rounded-full transition-colors relative ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'bg-primary' : 'bg-surfaceAlt border border-white/10'}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'translate-x-[26px]' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </div>
+
         <div className="bg-surface/50 border border-white/5 rounded-3xl p-6">
           <h3 className="text-sm font-bold text-primary tracking-widest uppercase mb-6">{t('game_effects')}</h3>
 

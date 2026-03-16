@@ -35,10 +35,10 @@ const getLevelConfig = (level: number, difficulty: Difficulty): GridConfig => {
     return { size: 3, maxValue: 5, negativeChance: 0, lockChance: 0, unknownChance: 0 };
   }
   if (difficulty === 'medium') {
-    return { size: 5, maxValue: 9, negativeChance: 0.1, lockChance: 0, unknownChance: 0 };
+    return { size: 4, maxValue: 9, negativeChance: 0.1, lockChance: 0, unknownChance: 0 };
   }
   if (difficulty === 'hard') {
-    return { size: 7, maxValue: 15, negativeChance: 0.2, lockChance: 0.15, unknownChance: 0.1 };
+    return { size: 5, maxValue: 15, negativeChance: 0.2, lockChance: 0.15, unknownChance: 0.1 };
   }
 
   // Progressive difficulty

@@ -2,7 +2,7 @@ export type CellState = 'active' | 'passive';
 export type CellType = 'normal' | 'negative' | 'locked' | 'unknown';
 export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack' | 'duello';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive' | 'time_attack' | 'daily';
-export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking';
+export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests';
 
 export interface UserProfile {
   uid: string;
@@ -17,6 +17,14 @@ export interface UserProfile {
   equipped?: Record<string, string>; // Category -> Item ID
   totalScore?: number; // legacy
   highestLevel?: number; // legacy
+  lastLoginDate?: string; // ISO date string YYYY-MM-DD
+  loginStreak?: number;
+  playtimeSeconds?: number; // Total seconds played
+  playtimeRewardClaimed?: number; // seconds at which last reward was claimed
+  dailyQuestsDate?: string; // ISO date string to reset quests
+  dailyQuestsProgress?: Record<string, number>; // questId -> progress count
+  weeklyQuestsDate?: string; // ISO week string to reset weekly quests
+  weeklyQuestsProgress?: Record<string, number>; // questId -> progress count
 }
 
 export interface CellData {
