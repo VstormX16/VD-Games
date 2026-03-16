@@ -12,6 +12,7 @@ export interface UserProfile {
   scores: Record<Difficulty, number>;
   levels: Record<Difficulty, number>;
   coins: number;
+  trophies?: number;
   inventory?: string[]; // IDs of purchased items
   equipped?: Record<string, string>; // Category -> Item ID
   totalScore?: number; // legacy

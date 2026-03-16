@@ -15,6 +15,7 @@ interface UserState {
   logout: () => Promise<void>;
   updateScore: (points: number, levelInfo: number, difficulty: import('../types/game').Difficulty) => Promise<void>;
   updateCoins: (amount: number) => Promise<void>;
+  updateTrophies: (amount: number) => Promise<void>;
   buyItem: (itemId: string, cost: number) => Promise<boolean>;
   equipItem: (category: string, itemId: string) => Promise<void>;
   initializeAuth: () => void;
@@ -47,6 +48,7 @@ export const useUserStore = create<UserState>((set, get) => ({
           profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1, time_attack: 1, daily: 1 };
         }
         if (typeof profile.coins !== 'number') profile.coins = 0;
+        if (typeof profile.trophies !== 'number') profile.trophies = 0;
         if (!profile.inventory) profile.inventory = [];
         if (!profile.equipped) profile.equipped = {};
       } else {
@@ -58,6 +60,7 @@ export const useUserStore = create<UserState>((set, get) => ({
           scores: { easy: 0, medium: 0, hard: 0, progressive: 0, time_attack: 0, daily: 0 },
           levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
           coins: 100, // Welcome bonus
+          trophies: 0,
           inventory: [],
           equipped: {}
         };
@@ -119,6 +122,22 @@ export const useUserStore = create<UserState>((set, get) => ({
       await updateDoc(userRef, { coins: newCoins });
     } catch (error) {
        console.error("Error updating coins:", error);
+    }
+  },
+
+  updateTrophies: async (amount) => {
+    const { user } = get();
+    if (!user) return;
+    
+    // Trophies cannot be less than 0
+    const newTrophies = Math.max(0, (user.trophies || 0) + amount);
+    set({ user: { ...user, trophies: newTrophies } });
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { trophies: newTrophies });
+    } catch (error) {
+       console.error("Error updating trophies:", error);
     }
   },
 
@@ -185,6 +204,7 @@ export const useUserStore = create<UserState>((set, get) => ({
              ud.levels = { easy: 1, medium: 1, hard: 1, progressive: ud.highestLevel || 1, time_attack: 1, daily: 1 };
           }
           if (typeof ud.coins !== 'number') ud.coins = 0;
+          if (typeof ud.trophies !== 'number') ud.trophies = 0;
           if (!ud.inventory) ud.inventory = [];
           if (!ud.equipped) ud.equipped = {};
           set({ user: ud, loading: false });

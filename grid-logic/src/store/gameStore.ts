@@ -17,6 +17,7 @@ interface GameState {
   isShaking: boolean;
   matchId: string | null;
   opponent: { displayName: string } | null;
+  matchProgress: number;
   
   // Actions
   toggleCell: (row: number, col: number) => void;
@@ -98,6 +99,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   isShaking: false,
   matchId: null,
   opponent: null,
+  matchProgress: 0,
 
   decrementTimeLeft: () => {
     const { timeLeft, status } = get();
@@ -158,6 +160,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { cells, rowTargets, colTargets, boardSize } = get();
     let isWon = true;
 
+    let correctCount = 0;
+
     for (let r = 0; r < boardSize; r++) {
       let rowSum = 0;
       for (let c = 0; c < boardSize; c++) {
@@ -165,7 +169,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           rowSum += cells[r][c].value;
         }
       }
-      if (rowSum !== rowTargets[r]) isWon = false;
+      if (rowSum === rowTargets[r]) correctCount++;
+      else isWon = false;
     }
 
     for (let c = 0; c < boardSize; c++) {
@@ -175,8 +180,11 @@ export const useGameStore = create<GameState>((set, get) => ({
           colSum += cells[r][c].value;
         }
       }
-      if (colSum !== colTargets[c]) isWon = false;
+      if (colSum === colTargets[c]) correctCount++;
+      else isWon = false;
     }
+
+    set({ matchProgress: correctCount });
 
     if (isWon) {
       playSuccess();
@@ -236,6 +244,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       gameMode: 'duello',
       matchId,
       opponent: { displayName: opponentName },
+      matchProgress: 0,
       timeLeft: null, // We could add a time limit to duello later
       scoreCount: 0
     });

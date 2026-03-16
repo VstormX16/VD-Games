@@ -66,9 +66,15 @@ const MainMenu = () => {
         >
           <Settings className="w-5 h-5 text-textMuted hover:text-white" />
         </button>
-        <div className="flex items-center gap-2 bg-yellow-500/10 backdrop-blur-md text-yellow-500 px-4 py-2 rounded-full border border-yellow-500/20 font-bold font-mono text-sm shadow-lg">
-          <Coins className="w-4 h-4" />
-          {user?.coins || 0}
+        <div className="flex items-center gap-4 bg-surface/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/5 shadow-lg">
+          <div className="flex items-center gap-1.5 text-yellow-500 font-bold font-mono text-sm">
+            <Coins className="w-4 h-4" />
+            {user?.coins || 0}
+          </div>
+          <div className="w-px h-4 bg-white/10" />
+          <div className="flex items-center gap-1.5 text-yellow-500 font-bold font-mono text-sm">
+            🏆 {user?.trophies || 0}
+          </div>
         </div>
       </header>
 
@@ -104,13 +110,8 @@ const MainMenu = () => {
           <button
             onClick={() => {
               if (user) {
-                if ((user.coins || 0) >= 100) {
-                  playClick();
-                  setView('matchmaking');
-                } else {
-                  playError();
-                  alert("1v1 Düello için 100 Altına ihtiyacın var. Lütfen mağazadan edin.");
-                }
+                playClick();
+                setView('matchmaking');
               } else {
                 setView('auth');
               }
@@ -118,7 +119,7 @@ const MainMenu = () => {
             className="neo-button w-full py-5 bg-danger/10 text-danger font-display font-bold text-lg rounded-2xl shadow-[0_8px_30px_rgba(244,63,94,0.25)] flex items-center justify-center gap-3 border border-danger/50"
           >
             <Swords className="w-6 h-6" />
-            1v1 Düello (100 Altın)
+            1v1 Düello
           </button>
 
           <button
@@ -232,11 +233,11 @@ const MatchmakingScreen = () => {
 
     let currentMatchId = '';
     let unsubscribe: () => void;
+    let hasStartedGame = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const findOrCreateMatch = async () => {
       try {
-        // 1. Pay the 100 coins entry fee optimistically
-        useUserStore.getState().updateCoins(-100);
 
         // 2. Query for waiting match
         const q = query(collection(db, 'matches'), where('status', '==', 'waiting'), limit(1));
@@ -259,7 +260,6 @@ const MatchmakingScreen = () => {
           // Setup match data with a random seed based on time
           await setDoc(doc(db, 'matches', currentMatchId), {
             status: 'waiting',
-            betAmount: 100,
             seed: currentMatchId, // Good enough random seed
             player1: { uid: userUid, displayName: userDisplayName || 'Oyuncu' },
           });
@@ -274,18 +274,20 @@ const MatchmakingScreen = () => {
             // Identify opponent
             const opponentName = data.player1.uid === userUid ? data.player2?.displayName : data.player1.displayName;
             
-            // Small delay for dramatic effect
-            setTimeout(() => {
-              initAudio();
-              startDuello(snap.id, opponentName || 'Rakip', data.seed);
-              setView('game');
-            }, 1500);
+            // Small delay for dramatic effect, but only queue it ONCE
+            if (!timeoutId) {
+              timeoutId = setTimeout(() => {
+                hasStartedGame = true;
+                initAudio();
+                startDuello(snap.id, opponentName || 'Rakip', data.seed);
+                setView('game');
+              }, 1500);
+            }
           }
         });
       } catch (error: unknown) {
         console.error("Matchmaking error:", error);
-        useUserStore.getState().updateCoins(100); // Refund
-        alert("Eşleştirme sunucusuna bağlanılamadı. (Veritabanı izni veya bağlantı sorunu olabilir). Altınınız iade edildi.");
+        alert("Eşleştirme sunucusuna bağlanılamadı. (Veritabanı izni veya bağlantı sorunu olabilir).");
         setView('menu');
       }
     };
@@ -293,14 +295,12 @@ const MatchmakingScreen = () => {
     findOrCreateMatch();
 
     return () => {
-      // Cleanup on unmount, if still waiting, we should delete the match and refund
+      if (timeoutId) clearTimeout(timeoutId);
       if (unsubscribe) unsubscribe();
-      if (currentMatchId) {
+      if (currentMatchId && !hasStartedGame) {
         getDoc(doc(db, 'matches', currentMatchId)).then((snap) => {
            if (snap.exists() && snap.data().status === 'waiting' && snap.data().player1.uid === userUid) {
              updateDoc(doc(db, 'matches', currentMatchId), { status: 'cancelled' });
-             // Refund
-             useUserStore.getState().updateCoins(100);
            }
         });
       }
@@ -315,10 +315,6 @@ const MatchmakingScreen = () => {
       </div>
 
       <h2 className="text-3xl font-display font-black text-center">{status}</h2>
-      
-      <p className="text-textMuted text-sm text-center">
-        Ortadaki Bahis: <span className="text-yellow-500 font-bold mx-1">200 Altın</span>
-      </p>
 
       <button
         onClick={() => setView('menu')}
@@ -363,14 +359,17 @@ const LeaderboardScreen = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [leaders, setLeaders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Difficulty>('progressive');
+  const [activeTab, setActiveTab] = useState<Difficulty | 'trophies'>('trophies');
 
   useEffect(() => {
     const fetchLeaders = async () => {
       setLoading(true);
       try {
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, orderBy(`scores.${activeTab}`, 'desc'), limit(10));
+        const q = activeTab === 'trophies'
+          ? query(usersRef, orderBy('trophies', 'desc'), limit(10))
+          : query(usersRef, orderBy(`scores.${activeTab}`, 'desc'), limit(10));
+          
         const querySnapshot = await getDocs(q);
         const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setLeaders(data);
@@ -394,6 +393,7 @@ const LeaderboardScreen = () => {
 
       <div className="flex gap-2 w-full mb-4 overflow-x-auto pb-2 scrollbar-hide">
         {[
+          { id: 'trophies', label: 'Kupa 🏆' },
           { id: 'progressive', label: 'İlerlemeli' },
           { id: 'easy', label: 'Kolay' },
           { id: 'medium', label: 'Orta' },
@@ -401,7 +401,7 @@ const LeaderboardScreen = () => {
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as Difficulty)}
+            onClick={() => setActiveTab(tab.id as Difficulty | 'trophies')}
             className={clsx(
               "px-4 py-2 font-bold font-display rounded-xl whitespace-nowrap transition-colors border border-white/5",
               activeTab === tab.id ? "bg-primary text-white" : "bg-surface text-textMuted hover:bg-surfaceAlt"
@@ -431,11 +431,12 @@ const LeaderboardScreen = () => {
                   </div>
                   <div>
                     <h3 className="font-bold">{u.displayName || 'İsimsiz Oyuncu'}</h3>
-                    <p className="text-xs text-textMuted">Max Lvl: {u.levels?.[activeTab] || 1}</p>
+                    {activeTab !== 'trophies' && <p className="text-xs text-textMuted">Max Lvl: {u.levels?.[activeTab] || 1}</p>}
                   </div>
                 </div>
-                <div className="font-display font-black text-primary text-xl">
-                  {u.scores?.[activeTab] || 0}
+                <div className="font-display font-black text-primary text-xl flex items-center gap-1">
+                  {activeTab === 'trophies' ? (u.trophies || 0) : (u.scores?.[activeTab] || 0)}
+                  {activeTab === 'trophies' && <span className="text-yellow-500 text-sm">🏆</span>}
                 </div>
               </div>
             ))}
@@ -972,12 +973,12 @@ const VictoryScreen = () => {
           <>
             <p className="text-danger font-bold tracking-widest text-sm mb-6">DÜELLO KAZANILDI</p>
             <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-6 flex flex-col items-center">
-              <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Altın</p>
+              <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Kupa</p>
               <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
-                +200 <Coins className="w-6 h-6" />
+                +10 🏆
               </p>
             </div>
-            <p className="text-textMuted mb-8 leading-relaxed">Rakipten önce çözdün! Ortadaki tüm bahsi sen kazandın.</p>
+            <p className="text-textMuted mb-8 leading-relaxed">Rakipten önce çözdün! Düellodan kupa kazandın.</p>
           </>
         ) : gameMode === 'daily' ? (
           <>
@@ -1069,12 +1070,11 @@ const DuelloLostScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
-        <h2 className="text-4xl font-display font-black text-white mb-2">KAYBETTİN</h2>
-        <p className="text-danger font-bold tracking-[0.2em] mb-6 text-sm">RAKİP DAHA HIZLIYDI</p>
+        <h2 className="text-3xl font-display font-black text-danger mb-2 uppercase break-words w-full px-2">{opponent?.displayName ? opponent.displayName : 'RAKİP'}</h2>
+        <h3 className="text-2xl font-display font-black text-white mb-6">KAZANDI</h3>
 
         <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
-          <p className="text-textMuted text-[10px] uppercase font-bold tracking-wider mb-2">{opponent?.displayName || 'Rakip'} Kazandı</p>
-          <p className="text-2xl font-mono font-black text-danger/80 line-through">-100 Altın</p>
+          <p className="text-2xl font-mono font-black text-danger/80 line-through">-5 Kupa 🏆</p>
         </div>
 
         <button
@@ -1089,8 +1089,13 @@ const DuelloLostScreen = () => {
 };
 
 const GameScreen = () => {
-  const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount, matchId, opponent } = useGameStore();
+  const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount, matchId, matchProgress, boardSize } = useGameStore();
   const { setView, user } = useUserStore();
+  
+  const userUid = user?.uid;
+  
+  const [opponentProgress, setOpponentProgress] = useState(0);
+  const [myRole, setMyRole] = useState<'player1' | 'player2' | null>(null);
 
   useEffect(() => {
     if (status !== 'playing' && gameMode !== 'duello') return;
@@ -1105,29 +1110,59 @@ const GameScreen = () => {
   useEffect(() => {
     if (gameMode !== 'duello' || !matchId) return;
     
-    // Listen to match document. If opponent wins, we lose immediately.
+    // Evaluate my role once
+    if (userUid) {
+        getDoc(doc(db, 'matches', matchId)).then(snap => {
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.player1?.uid === userUid) setMyRole('player1');
+                else setMyRole('player2');
+            }
+        });
+    }
+
+    // Listen to match document
     const unsubscribe = onSnapshot(doc(db, 'matches', matchId), (snap) => {
-       if (snap.exists() && snap.data().status === 'finished') {
-         if (snap.data().winnerUid !== user?.uid && status === 'playing') {
-            useGameStore.setState({ status: 'lost' });
-            playError();
+       if (snap.exists()) {
+         const data = snap.data();
+         if (data.status === 'finished') {
+           if (data.winnerUid !== userUid && status === 'playing') {
+              useGameStore.setState({ status: 'lost' });
+              useUserStore.getState().updateTrophies(-5);
+              playError();
+           }
+         }
+         
+         if (data.player1?.uid === userUid) {
+             setOpponentProgress(data.player2Progress || 0);
+         } else {
+             setOpponentProgress(data.player1Progress || 0);
          }
        }
     });
 
     return () => unsubscribe();
-  }, [gameMode, matchId, user, status]);
+  }, [gameMode, matchId, userUid, status]);
+
+  // Push our progress to firebase when it changes
+  useEffect(() => {
+     if (myRole && matchId && gameMode === 'duello' && status === 'playing') {
+         updateDoc(doc(db, 'matches', matchId), {
+             [`${myRole}Progress`]: matchProgress
+         }).catch(() => {});
+     }
+  }, [matchProgress, myRole, matchId, gameMode, status]);
 
   useEffect(() => {
      // Handle Win Logic for Duello
-     if (status === 'won' && gameMode === 'duello' && matchId) {
+     if (status === 'won' && gameMode === 'duello' && matchId && userUid) {
         updateDoc(doc(db, 'matches', matchId), {
            status: 'finished',
-           winnerUid: user?.uid,
+           winnerUid: userUid,
         }).catch(err => console.error(err));
-        useUserStore.getState().updateCoins(200);
+        useUserStore.getState().updateTrophies(10);
      }
-  }, [status, gameMode, matchId, user]);
+  }, [status, gameMode, matchId, userUid]);
 
   if (status === 'won') return <VictoryScreen />;
   if (status === 'lost' && gameMode === 'time_attack') return <GameOverScreen />;
@@ -1154,7 +1189,7 @@ const GameScreen = () => {
               {gameMode === 'online' ? 'Çevrimiçi Seri' :
                 gameMode === 'time_attack' ? `Skor: ${scoreCount}` :
                   gameMode === 'daily' ? 'Günün Sorusu' :
-                  gameMode === 'duello' ? `Rakip: ${opponent?.displayName || 'Oyuncu'}` : 'Çevrimdışı'}
+                  gameMode === 'duello' ? `Rakip ${opponentProgress} | Sen ${matchProgress} / ${boardSize * 2}` : 'Çevrimdışı'}
             </span>
             <h1 className="text-2xl font-display font-black text-white">
               {gameMode === 'daily' ? 'Meydan Okuma' : gameMode === 'duello' ? '1v1 Düello' : `Bölüm ${level}`}
