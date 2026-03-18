@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { UserProfile, AppView } from '../types/game';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { getCurrentSeason } from '../utils/season';
 import { getLeagueInfo, type RankInfo } from '../utils/rank';
 
@@ -30,7 +30,9 @@ interface UserState {
   updateQuestProgress: (action: import('../data/quests').QuestAction) => Promise<void>;
   claimQuestReward: (questId: string, isWeekly: boolean, reward: number) => Promise<void>;
   claimSeasonReward: () => Promise<boolean>;
-  addFriend: (friendUid: string) => Promise<{ success: boolean; error?: string }>;
+  sendFriendRequest: (friendUid: string) => Promise<{ success: boolean; error?: string }>;
+  acceptFriendRequest: (requestId: string, fromUid: string) => Promise<{ success: boolean; error?: string }>;
+  declineFriendRequest: (requestId: string) => Promise<void>;
   removeFriend: (friendUid: string) => Promise<void>;
   buyFriendSlot: () => Promise<boolean>;
   initializeAuth: () => void;
@@ -87,7 +89,8 @@ export const useUserStore = create<UserState>((set, get) => ({
           inventory: [],
           friends: [],
           friendSlots: 5,
-          equipped: {}
+          equipped: {},
+          friendCode: Math.random().toString(36).substring(2, 8).toUpperCase()
         };
         await setDoc(userRef, profile);
       }
@@ -439,38 +442,97 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
-  addFriend: async (friendUid: string) => {
+  sendFriendRequest: async (friendCode: string) => {
+    const { user } = get();
+    if (!user) return { success: false, error: 'Giriş yapılmamış.' };
+    
+    const code = friendCode.trim().toUpperCase();
+    if (code === user.friendCode) return { success: false, error: 'Kendini ekleyemezsin!' };
+    
+    const friends = user.friends || [];
+    const maxSlots = user.friendSlots || 5;
+    if (friends.length >= maxSlots) return { success: false, error: 'Arkadaş slotun dolu! Mağazadan yeni slot al.' };
+    
+    try {
+      // Look up user by friendCode
+      const q = query(collection(db, 'users'), where('friendCode', '==', code));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) return { success: false, error: 'Bu kodla oyuncu bulunamadı.' };
+      
+      const friendDoc = snap.docs[0];
+      const friendUid = friendDoc.id;
+      const friendData = friendDoc.data();
+      
+      if (friends.includes(friendUid)) return { success: false, error: 'Bu kişi zaten arkadaşın!' };
+      
+      // Check friend's slot capacity
+      const friendFriends = friendData.friends || [];
+      const friendMaxSlots = friendData.friendSlots || 5;
+      if (friendFriends.length >= friendMaxSlots) return { success: false, error: 'Karşı tarafın arkadaş slotu dolu.' };
+      
+      // Add both sides
+      const newFriends = [...friends, friendUid];
+      set({ user: { ...user, friends: newFriends } });
+      await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
+      
+      if (!friendFriends.includes(user.uid)) {
+        await updateDoc(doc(db, 'users', friendUid), { friends: [...friendFriends, user.uid] });
+      }
+      
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: 'Bağlantı hatası.' };
+    }
+  },
+
+  acceptFriendRequest: async (requestId: string, fromUid: string) => {
     const { user } = get();
     if (!user) return { success: false, error: 'Not logged in' };
     
     const friends = user.friends || [];
     const maxSlots = user.friendSlots || 5;
     
-    if (friends.includes(friendUid)) return { success: false, error: 'Zaten arkadaşın.' };
-    if (friends.length >= maxSlots) return { success: false, error: 'Arkadaş slotun dolu! Mağazadan ek slot satın alabilirsin.' };
-    if (friendUid === user.uid) return { success: false, error: 'Kendini ekleyemezsin!' };
-    
-    // Check if friend user exists
-    const friendRef = doc(db, 'users', friendUid);
-    const friendSnap = await getDoc(friendRef);
-    if (!friendSnap.exists()) return { success: false, error: 'Oyuncu bulunamadı.' };
-    
-    const newFriends = [...friends, friendUid];
-    set({ user: { ...user, friends: newFriends } });
+    if (friends.includes(fromUid)) {
+      // Already friends, just delete the request
+      await deleteDoc(doc(db, 'friendRequests', requestId)).catch(() => {});
+      return { success: true };
+    }
+    if (friends.length >= maxSlots) return { success: false, error: 'Arkadaş slotun dolu!' };
     
     try {
+      // Add to both users' friends lists
+      const newFriends = [...friends, fromUid];
+      set({ user: { ...user, friends: newFriends } });
       await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
-      // Also add to friend's list (mutual)
-      const friendData = friendSnap.data();
-      const friendFriends = friendData.friends || [];
-      const friendMaxSlots = friendData.friendSlots || 5;
-      if (!friendFriends.includes(user.uid) && friendFriends.length < friendMaxSlots) {
-        await updateDoc(friendRef, { friends: [...friendFriends, user.uid] });
+      
+      // Add to sender's list too
+      const friendRef = doc(db, 'users', fromUid);
+      const friendSnap = await getDoc(friendRef);
+      if (friendSnap.exists()) {
+        const friendData = friendSnap.data();
+        const friendFriends = friendData.friends || [];
+        const friendMaxSlots = friendData.friendSlots || 5;
+        if (!friendFriends.includes(user.uid) && friendFriends.length < friendMaxSlots) {
+          await updateDoc(friendRef, { friends: [...friendFriends, user.uid] });
+        }
       }
+      
+      // Delete the request
+      await deleteDoc(doc(db, 'friendRequests', requestId));
       return { success: true };
     } catch (e) {
       console.error(e);
       return { success: false, error: 'Bağlantı hatası.' };
+    }
+  },
+
+  declineFriendRequest: async (requestId: string) => {
+    try {
+      await deleteDoc(doc(db, 'friendRequests', requestId));
+    } catch (e) {
+      console.error(e);
     }
   },
 
@@ -532,6 +594,12 @@ export const useUserStore = create<UserState>((set, get) => ({
           if (!ud.friends) ud.friends = [];
           if (typeof ud.friendSlots !== 'number') ud.friendSlots = 5;
           if (typeof ud.loginStreak !== 'number') ud.loginStreak = 0;
+
+          // Generate friendCode if missing
+          if (!ud.friendCode) {
+            ud.friendCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            updateDoc(userRef, { friendCode: ud.friendCode }).catch(console.error);
+          }
 
           const currentSeason = getCurrentSeason();
           let needsUpdate = false;

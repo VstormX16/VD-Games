@@ -14,7 +14,7 @@ export const BottomNav = () => {
   }
 
   const navItems = [
-    { id: 'quests', icon: Trophy, label: 'Görevler', authRequired: true },
+    { id: 'quests', icon: Trophy, label: t('quests'), authRequired: true },
     { id: 'leaderboard', icon: Medal, label: t('leaderboard'), authRequired: false },
     { id: 'menu', icon: Home, label: t('menu'), authRequired: false },
     { id: 'shop', icon: ShoppingBag, label: t('shop'), authRequired: true },

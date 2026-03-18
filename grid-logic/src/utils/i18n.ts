@@ -23,6 +23,8 @@ export const translations = {
     "shop": "Mağaza",
     "profile": "Profil",
     "login": "Giriş",
+    "quests": "Görevler",
+    "friends": "Arkadaşlar",
     
     // Auth & Generic
     "welcome": "Hoş Geldin!",
@@ -40,6 +42,15 @@ export const translations = {
     "high_score": "Skor",
     "max_level": "Maks Seviye",
     "logout": "Çıkış Yap",
+    "my_profile": "Profilim",
+    "win_streak": "Galibiyet Serisi",
+    "win_streak_count": "Maçlık Galibiyet Serisi!",
+    "trophies": "Kupa",
+    "total_score": "Toplam Skor",
+    "change_avatar": "Avatarını Değiştir",
+    "select_avatar": "Avatar Seç",
+    "select_frame": "Çerçeve Seç",
+    "equipped": "Kuşanılmış",
 
     // Shop
     "shop_title": "Mağaza",
@@ -52,6 +63,17 @@ export const translations = {
     "theme_crimson_desc": "Oyun tahtasını kan kırmızı yapar.",
     "item_goldlock_title": "Altın Kilit",
     "item_goldlock_desc": "Kilitli kutular altın renginde parlar.",
+    "owned": "Sahipsin",
+    "equip": "Kuşan",
+    "equipped_label": "Kuşanıldı",
+    "cosmetics": "Kozmetikler",
+    "themes": "Temalar",
+    "sound_packs": "Ses Paketleri",
+    "avatars": "Avatarlar",
+    "frames": "Çerçeveler",
+    "friend_slots": "Arkadaş Slotları",
+    "extra_slot": "Ek Arkadaş Slotu",
+    "extra_slot_desc": "Arkadaş limitini +1 artırır.",
 
     // Game
     "level": "BÖLÜM",
@@ -70,7 +92,19 @@ export const translations = {
     "offline": "Çevrimdışı",
     "challenge": "Meydan Okuma",
     "hint": "İPUCU",
-    
+    "surrender": "PES ET",
+    "surrender_title": "Pes Etmek İstiyor Musun?",
+    "surrender_desc": "Bu düellodan çekilirsen -10 kupa kaybedeceksin ve rakibin kazanacak.",
+    "continue": "DEVAM ET",
+    "duel_won": "DÜELLO KAZANILDI",
+    "duel_won_desc": "Rakipten önce çözdün! Düellodan kupa kazandın.",
+    "rank_points_earned": "Kazanılan Rank Puanı",
+    "rank_points_lost": "Rank Puanı",
+    "opponent_won": "KAZANDI",
+    "time_attack_mode": "ZAMANA KARŞI MODU",
+    "add_friend": "Arkadaş Ekle",
+    "request_sent": "İstek Gönderildi",
+
     // Guide
     "how_to_play": "NASIL OYNANIR?",
     "guide_desc": "Bu oyun, satır ve sütun hedeflerine ulaşmak için kutuları aktif (mavi) veya pasif (karanlık) hale getirdiğin bir zeka bulmacasıdır.",
@@ -82,6 +116,76 @@ export const translations = {
     "locked_boxes_desc": "Asma kilitli kutular sabittir. Onları değiştiremezsin ancak hedefe dahildir.",
     "unknown_boxes": "Bilinmeyen Kutular",
     "unknown_boxes_desc": "Soru işareti olan kutuların değeri, sen onları seçene kadar gizlidir. Risk almalı mısın?",
+
+    // Matchmaking & Duello
+    "searching": "Rakip aranıyor...",
+    "match_found": "Rakip Bulundu!",
+    "creating_room": "Oda oluşturuluyor...",
+    "waiting_opponent": "Rakip bekleniyor...",
+    "room_code": "Oda Kodu",
+    "join_room": "Odaya Katıl",
+    "create_room": "Oda Oluştur",
+    "private_duel": "Özel Düello",
+    "public_duel": "Herkese Açık",
+    "vs": "VS",
+    "you": "SEN",
+    "opponent": "RAKİP",
+    "duel_invite": "Düello Daveti",
+    "duel_invite_desc": "seni 1v1 düelloya davet ediyor!",
+
+    // Friends
+    "your_player_id": "Senin Oyuncu ID'n",
+    "send_request": "İstek Gönder",
+    "paste_player_id": "Oyuncu ID yapıştır...",
+    "send": "Gönder",
+    "friend_list": "Arkadaş Listesi",
+    "no_friends": "Henüz arkadaşın yok.",
+    "no_friends_desc": "Oyuncu ID paylaşarak arkadaşlık isteği gönder!",
+    "incoming_requests": "Gelen İstekler",
+    "friend_request": "Arkadaşlık İsteği",
+    "request_sent_success": "Arkadaşlık isteği gönderildi!",
+
+    // Quests
+    "daily_login_streak": "Ödüllü Giriş Serisi",
+    "daily_streak": "Günlük Seri",
+    "daily_streak_desc": "Her gün aralıksız girmeye devam et, kazanacağın ödüller katlanarak büyüsün!",
+    "streak_broken": "Serin Kırıldı!",
+    "streak_save": "Sıfırlanmaması için dondurucu al!",
+    "save_streak": "KURTAR",
+    "give_up_reset": "Vazgeç & Sıfırla",
+    "login_entry": "Giriş",
+    "collect": "AL",
+    "collected": "ALINDI",
+    "playtime_reward": "Oynama Ödülü",
+    "daily_quests": "Günlük Görevler",
+    "weekly_quests": "Haftalık Görevler",
+    "claim": "AL",
+    "claimed": "ALINDI",
+    "days_remaining": "gün kaldı",
+
+    // Leaderboard
+    "leaderboard_title": "Liderlik Tablosu",
+    "progressive_tab": "İlerlemeli",
+    "hard_tab": "Zor",
+    "time_attack_tab": "Z. Karşı",
+    "trophies_tab": "Kupalar",
+
+    // Settings
+    "appearance": "Görünüm",
+    "dark_mode": "Karanlık Mod (Dark)",
+
+    // Generic
+    "error": "Hata",
+    "success": "Başarılı",
+    "cancel": "İptal",
+    "confirm": "Onayla",
+    "close": "Kapat",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı",
+    "surrender_alert": "Düello menüsünden çıkamazsınız. Çıkmak için aşağıdaki koca kırmızı 'PES ET' butonunu kullanmalısınız!",
+    "opponent_short": "Rakip",
+    "you_short": "Sen",
+    "duel_1v1": "1v1 Düello",
   },
   en: {
     // Top Bar
@@ -105,6 +209,8 @@ export const translations = {
     "shop": "Shop",
     "profile": "Profile",
     "login": "Login",
+    "quests": "Quests",
+    "friends": "Friends",
     
     // Auth & Generic
     "welcome": "Welcome!",
@@ -122,6 +228,15 @@ export const translations = {
     "high_score": "Score",
     "max_level": "Max Level",
     "logout": "Logout",
+    "my_profile": "My Profile",
+    "win_streak": "Win Streak",
+    "win_streak_count": "Win Streak!",
+    "trophies": "Trophies",
+    "total_score": "Total Score",
+    "change_avatar": "Change Avatar",
+    "select_avatar": "Select Avatar",
+    "select_frame": "Select Frame",
+    "equipped": "Equipped",
 
     // Shop
     "shop_title": "Shop",
@@ -134,6 +249,17 @@ export const translations = {
     "theme_crimson_desc": "Turns the game board blood red.",
     "item_goldlock_title": "Golden Lock",
     "item_goldlock_desc": "Locked boxes shine in golden color.",
+    "owned": "Owned",
+    "equip": "Equip",
+    "equipped_label": "Equipped",
+    "cosmetics": "Cosmetics",
+    "themes": "Themes",
+    "sound_packs": "Sound Packs",
+    "avatars": "Avatars",
+    "frames": "Frames",
+    "friend_slots": "Friend Slots",
+    "extra_slot": "Extra Friend Slot",
+    "extra_slot_desc": "Increases friend limit by +1.",
 
     // Game
     "level": "LEVEL",
@@ -152,7 +278,19 @@ export const translations = {
     "offline": "Offline",
     "challenge": "Challenge",
     "hint": "HINT",
-    
+    "surrender": "GIVE UP",
+    "surrender_title": "Do You Want to Give Up?",
+    "surrender_desc": "If you withdraw from this duel, you will lose -10 trophies and your opponent will win.",
+    "continue": "CONTINUE",
+    "duel_won": "DUEL WON",
+    "duel_won_desc": "You solved it before your opponent! You earned trophies from the duel.",
+    "rank_points_earned": "Rank Points Earned",
+    "rank_points_lost": "Rank Points",
+    "opponent_won": "WON",
+    "time_attack_mode": "TIME ATTACK MODE",
+    "add_friend": "Add Friend",
+    "request_sent": "Request Sent",
+
     // Guide
     "how_to_play": "HOW TO PLAY?",
     "guide_desc": "This is a logic puzzle where you activate (blue) or deactivate (dark) boxes to piece together row and column targets.",
@@ -164,6 +302,76 @@ export const translations = {
     "locked_boxes_desc": "Boxes with a padlock are fixed. You cannot interact with them, but they count towards the target.",
     "unknown_boxes": "Unknown Boxes",
     "unknown_boxes_desc": "The value of boxes with a question mark is hidden until you select them.",
+
+    // Matchmaking & Duello
+    "searching": "Searching for opponent...",
+    "match_found": "Opponent Found!",
+    "creating_room": "Creating room...",
+    "waiting_opponent": "Waiting for opponent...",
+    "room_code": "Room Code",
+    "join_room": "Join Room",
+    "create_room": "Create Room",
+    "private_duel": "Private Duel",
+    "public_duel": "Public",
+    "vs": "VS",
+    "you": "YOU",
+    "opponent": "OPPONENT",
+    "duel_invite": "Duel Invite",
+    "duel_invite_desc": "is inviting you to a 1v1 duel!",
+
+    // Friends
+    "your_player_id": "Your Player ID",
+    "send_request": "Send Request",
+    "paste_player_id": "Paste Player ID...",
+    "send": "Send",
+    "friend_list": "Friend List",
+    "no_friends": "You don't have any friends yet.",
+    "no_friends_desc": "Share your Player ID to send friend requests!",
+    "incoming_requests": "Incoming Requests",
+    "friend_request": "Friend Request",
+    "request_sent_success": "Friend request sent!",
+
+    // Quests
+    "daily_login_streak": "Login Streak Rewards",
+    "daily_streak": "Daily Streak",
+    "daily_streak_desc": "Keep logging in every day, and your rewards will multiply!",
+    "streak_broken": "Streak Broken!",
+    "streak_save": "Get a freeze to save it!",
+    "save_streak": "SAVE",
+    "give_up_reset": "Give Up & Reset",
+    "login_entry": "Login",
+    "collect": "CLAIM",
+    "collected": "CLAIMED",
+    "playtime_reward": "Playtime Reward",
+    "daily_quests": "Daily Quests",
+    "weekly_quests": "Weekly Quests",
+    "claim": "CLAIM",
+    "claimed": "CLAIMED",
+    "days_remaining": "days remaining",
+
+    // Leaderboard
+    "leaderboard_title": "Leaderboard",
+    "progressive_tab": "Progressive",
+    "hard_tab": "Hard",
+    "time_attack_tab": "T. Attack",
+    "trophies_tab": "Trophies",
+
+    // Settings
+    "appearance": "Appearance",
+    "dark_mode": "Dark Mode",
+
+    // Generic
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied",
+    "surrender_alert": "You cannot exit from the duel menu. You must use the big red 'SURRENDER' button below to exit!",
+    "opponent_short": "Opponent",
+    "you_short": "You",
+    "duel_1v1": "1v1 Duel",
   }
 };
 

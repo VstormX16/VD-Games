@@ -31,6 +31,7 @@ export interface UserProfile {
   weeklyQuestsProgress?: Record<string, { count: number; claimed: boolean }>; // questId -> progress
   friends?: string[]; // Array of friend UIDs
   friendSlots?: number; // Max friends allowed (default 5, purchasable)
+  friendCode?: string; // Short 6-char code for easy friend adding
 }
 
 export interface CellData {

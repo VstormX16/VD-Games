@@ -19,12 +19,13 @@ interface GameState {
   matchId: string | null;
   opponent: { displayName: string, uid?: string, photoURL?: string, frame?: string } | null;
   matchProgress: number;
+  isPrivateMatch: boolean;
   
   // Actions
   toggleCell: (row: number, col: number) => void;
   checkWinCondition: () => void;
   startLevel: (levelNumber: number, mode?: GameMode, diff?: Difficulty) => void;
-  startDuello: (matchId: string, opponentName: string, seed: string, opponentUid?: string, photoURL?: string, frame?: string) => void;
+  startDuello: (matchId: string, opponentName: string, seed: string, opponentUid?: string, photoURL?: string, frame?: string, isPrivate?: boolean) => void;
   resetGrid: () => void;
   useHint: () => void;
   decrementTimeLeft: () => void;
@@ -102,6 +103,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   matchId: null,
   opponent: null,
   matchProgress: 0,
+  isPrivateMatch: false,
 
   decrementTimeLeft: () => {
     const { timeLeft, status } = get();
@@ -253,7 +255,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  startDuello: (matchId, opponentName, seed, opponentUid?, photoURL?, frame?) => {
+  startDuello: (matchId, opponentName, seed, opponentUid?, photoURL?, frame?, isPrivate?) => {
     // A standard medium level but fully seeded
     const config = { ...getLevelConfig(1, 'medium'), seed };
     const { cells, rowTargets, colTargets } = generateGrid(config);
@@ -270,7 +272,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       matchId,
       opponent: { displayName: opponentName, uid: opponentUid, photoURL, frame },
       matchProgress: 0,
-      timeLeft: null, // We could add a time limit to duello later
+      isPrivateMatch: isPrivate || false,
+      timeLeft: null,
       scoreCount: 0,
       hintsLeft: 0 // No hints in duello
     });
@@ -301,6 +304,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       difficulty: selectedDifficulty,
       gameMode: selectedMode,
       hintsLeft: 1, // Only 1 hint per level for normal modes
+      matchId: selectedMode !== 'duello' ? null : get().matchId,
+      opponent: selectedMode !== 'duello' ? null : get().opponent,
+      matchProgress: 0,
       ...(selectedMode === 'time_attack' && levelNumber === 1 && { timeLeft: 60, scoreCount: 0 })
     });
   },

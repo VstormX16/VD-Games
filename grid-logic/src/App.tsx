@@ -525,7 +525,8 @@ const FriendDuelScreen = () => {
 };
 
 const FriendsScreen = () => {
-  const { user, setView, addFriend, removeFriend } = useUserStore();
+  const t = useTranslation();
+  const { user, setView, sendFriendRequest, removeFriend } = useUserStore();
   const [friendUid, setFriendUid] = useState('');
   const [friendProfiles, setFriendProfiles] = useState<{uid: string; displayName: string; photoURL?: string | null}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -562,13 +563,13 @@ const FriendsScreen = () => {
   const handleAdd = async () => {
     setAddError(''); setAddSuccess('');
     if (!friendUid.trim()) return;
-    const result = await addFriend(friendUid.trim());
+    const result = await sendFriendRequest(friendUid.trim());
     if (result.success) {
-      setAddSuccess('Arkadaş eklendi!');
+      setAddSuccess(t('request_sent_success'));
       setFriendUid('');
       playSuccess();
     } else {
-      setAddError(result.error || 'Hata oluştu.');
+      setAddError(result.error || t('error'));
       playError();
     }
   };
@@ -599,7 +600,7 @@ const FriendsScreen = () => {
   };
 
   const handleCopyUid = () => {
-    navigator.clipboard.writeText(user.uid).catch(() => {});
+    navigator.clipboard.writeText(user.friendCode || user.uid).catch(() => {});
     setCopiedUid(true);
     setTimeout(() => setCopiedUid(false), 2000);
   };
@@ -610,7 +611,7 @@ const FriendsScreen = () => {
         <button onClick={() => setView('menu')} className="p-3 glass-card rounded-xl neo-button shrink-0">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-3xl font-display font-black">Arkadaşlar</h2>
+        <h2 className="text-3xl font-display font-black">{t('friends')}</h2>
         <div className="ml-auto flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20 font-bold text-xs">
           <Users className="w-3.5 h-3.5" />
           {(user.friends || []).length}/{user.friendSlots || 5}
@@ -619,10 +620,10 @@ const FriendsScreen = () => {
 
       {/* My UID */}
       <div className="glass-card rounded-2xl p-4 mb-6">
-        <p className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2">Senin Oyuncu ID'n</p>
+        <p className="text-textMuted text-[10px] font-bold uppercase tracking-widest mb-2">{t('your_player_id')}</p>
         <div className="flex items-center gap-3">
           <code className="flex-1 bg-bgStart px-4 py-3 rounded-xl text-textMain font-mono text-sm truncate border border-white/5">
-            {user.uid}
+            {user.friendCode || user.uid}
           </code>
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -638,14 +639,14 @@ const FriendsScreen = () => {
       <div className="glass-card rounded-2xl p-5 mb-6">
         <h3 className="text-lg font-display font-bold mb-4 flex items-center gap-2">
           <UserPlus className="w-5 h-5 text-primary" />
-          Arkadaş Ekle
+          {t('add_friend')}
         </h3>
         <div className="flex gap-3">
           <input
             type="text"
             value={friendUid}
             onChange={e => setFriendUid(e.target.value)}
-            placeholder="Oyuncu ID yapıştır..."
+            placeholder={t('paste_player_id')}
             className="flex-1 bg-bgStart border border-white/10 rounded-xl py-3 px-4 text-textMain text-sm font-mono focus:border-primary outline-none placeholder:text-textMuted/50"
           />
           <motion.button
@@ -653,7 +654,7 @@ const FriendsScreen = () => {
             onClick={handleAdd}
             className="neo-button px-5 py-3 bg-primary text-white font-bold rounded-xl shadow-[0_5px_15px_rgba(168,85,247,0.3)]"
           >
-            Ekle
+            {t('add_friend')}
           </motion.button>
         </div>
         {addError && <p className="text-danger text-xs mt-2 font-medium">{addError}</p>}
@@ -661,14 +662,14 @@ const FriendsScreen = () => {
       </div>
 
       {/* Friends List */}
-      <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">Arkadaş Listesi</h3>
+      <h3 className="text-textMuted font-bold tracking-widest text-xs uppercase mb-3 px-1">{t('friend_list')}</h3>
       {loading ? (
-        <div className="text-center text-textMuted py-8">Yükleniyor...</div>
+        <div className="text-center text-textMuted py-8">{t('loading')}</div>
       ) : friendProfiles.length === 0 ? (
         <div className="glass-card rounded-2xl p-8 text-center">
           <Users className="w-12 h-12 text-textMuted/30 mx-auto mb-3" />
-          <p className="text-textMuted text-sm">Henüz arkadaşın yok.</p>
-          <p className="text-textMuted/70 text-xs mt-1">Oyuncu ID paylaşarak arkadaş ekle!</p>
+          <p className="text-textMuted text-sm">{t('no_friends')}</p>
+          <p className="text-textMuted/70 text-xs mt-1">{t('no_friends_desc')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1976,6 +1977,7 @@ const QuestsScreen = () => {
 };
 
 const VictoryScreen = () => {
+  const t = useTranslation();
   const { level, startLevel, gameMode } = useGameStore();
 
   useEffect(() => {
@@ -1990,17 +1992,19 @@ const VictoryScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-white/10 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-2xl relative z-10 overflow-hidden">
-        <h2 className="text-6xl font-display font-black text-textMain mb-2">BÖLÜM {level}</h2>
+        <h2 className="text-6xl font-display font-black text-textMain mb-2">{t('level')} {level}</h2>
         {gameMode === 'duello' ? (
           <>
-            <p className="text-danger font-bold tracking-widest text-sm mb-6">DÜELLO KAZANILDI</p>
-            <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-6 flex flex-col items-center">
-              <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">Kazanılan Rank Puanı</p>
-              <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
-                +15 🏆
-              </p>
-            </div>
-            <p className="text-textMuted mb-8 leading-relaxed">Rakipten önce çözdün! Düellodan kupa kazandın.</p>
+            <p className="text-danger font-bold tracking-widest text-sm mb-6">{t('duel_won')}</p>
+            {!useGameStore.getState().isPrivateMatch && (
+              <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-6 flex flex-col items-center">
+                <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">{t('rank_points_earned')}</p>
+                <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
+                  +15 🏆
+                </p>
+              </div>
+            )}
+            <p className="text-textMuted mb-8 leading-relaxed">{t('duel_won_desc')}</p>
           </>
         ) : gameMode === 'daily' ? (
           <>
@@ -2034,7 +2038,7 @@ const VictoryScreen = () => {
               className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
             >
               <Play className="fill-current w-6 h-6" />
-              Sıradaki Hedef
+              {t('next_target')}
             </button>
           </>
         )}
@@ -2042,7 +2046,7 @@ const VictoryScreen = () => {
           onClick={() => useUserStore.getState().setView('menu')}
           className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-textMain"
         >
-          Ana Menüye Dön
+          {t('return_menu')}
         </button>
       </div>
     </div>
@@ -2050,17 +2054,18 @@ const VictoryScreen = () => {
 };
 
 const GameOverScreen = () => {
+  const t = useTranslation();
   const { scoreCount } = useGameStore();
   const { setView } = useUserStore();
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
-        <h2 className="text-4xl font-display font-black text-textMain mb-2">SÜRE BİTTİ</h2>
-        <p className="text-danger font-bold tracking-[0.2em] mb-6 text-sm">ZAMANA KARŞI MODU</p>
+        <h2 className="text-4xl font-display font-black text-textMain mb-2">{t('game_over')}</h2>
+        <p className="text-danger font-bold tracking-[0.2em] mb-6 text-sm">{t('time_attack_mode')}</p>
 
         <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
-          <p className="text-textMuted text-xs font-bold uppercase tracking-wider mb-2">Kazanılan Skor</p>
+          <p className="text-textMuted text-xs font-bold uppercase tracking-wider mb-2">{t('score')}</p>
           <p className="text-5xl font-mono font-black text-purple-400">{scoreCount}</p>
         </div>
 
@@ -2072,13 +2077,13 @@ const GameOverScreen = () => {
           className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
         >
           <RotateCcw className="w-6 h-6" />
-          Tekrar Dene
+          {t('play_again')}
         </button>
         <button
           onClick={() => setView('menu')}
           className="mt-6 text-textMuted font-bold uppercase text-sm tracking-wider hover:text-textMain"
         >
-          Ana Menüye Dön
+          {t('return_menu')}
         </button>
       </div>
     </div>
@@ -2086,6 +2091,7 @@ const GameOverScreen = () => {
 };
 
 const DuelloLostScreen = () => {
+  const t = useTranslation();
   const { setView } = useUserStore();
   const { opponent } = useGameStore();
 
@@ -2098,18 +2104,20 @@ const DuelloLostScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
-        <h2 className="text-3xl font-display font-black text-danger mb-2 uppercase break-words w-full px-2">{opponent?.displayName ? opponent.displayName : 'RAKİP'}</h2>
-        <h3 className="text-2xl font-display font-black text-textMain mb-6">KAZANDI</h3>
+        <h2 className="text-3xl font-display font-black text-danger mb-2 uppercase break-words w-full px-2">{opponent?.displayName ? opponent.displayName : t('opponent_short')}</h2>
+        <h3 className="text-2xl font-display font-black text-textMain mb-6">{t('opponent_won')}</h3>
 
-        <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
-          <p className="text-2xl font-mono font-black text-danger/80 line-through">-10 Rank Puanı 🏆</p>
-        </div>
+        {!useGameStore.getState().isPrivateMatch && (
+           <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
+             <p className="text-2xl font-mono font-black text-danger/80 line-through">-10 {t('rank_points_lost')} 🏆</p>
+           </div>
+        )}
 
         <button
           onClick={() => setView('menu')}
           className="neo-button w-full py-5 bg-white text-bgStart font-display font-black text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
         >
-          Ana Menüye Dön
+          {t('return_menu')}
         </button>
       </div>
     </div>
@@ -2243,6 +2251,7 @@ const VsScreen = () => {
 };
 
 const GameScreen = () => {
+  const t = useTranslation();
   const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount, matchId, matchProgress, boardSize } = useGameStore();
   const { setView, user } = useUserStore();
   
@@ -2296,8 +2305,10 @@ const GameScreen = () => {
          if (data.status === 'finished') {
            if (data.winnerUid !== userUid && status === 'playing') {
               useGameStore.setState({ status: 'lost' });
-              useUserStore.getState().updateTrophies(-10); // Penalty for losing
-              useUserStore.getState().updateWinStreak(false);
+              if (!useGameStore.getState().isPrivateMatch) {
+                 useUserStore.getState().updateTrophies(-10); // Penalty for losing
+                 useUserStore.getState().updateWinStreak(false);
+              }
               playError();
            } else if (data.winnerUid === userUid && status === 'playing') {
               // The opponent surrendered or disconnected making us the winner
@@ -2322,7 +2333,7 @@ const GameScreen = () => {
     });
 
     return () => unsubscribe();
-  }, [gameMode, matchId, userUid, status]);
+  }, [gameMode, matchId, userUid]);
 
   // Push our progress to firebase when it changes
   useEffect(() => {
@@ -2333,18 +2344,19 @@ const GameScreen = () => {
      }
   }, [matchProgress, myRole, matchId, gameMode, status]);
 
+  // Handle Win Logic for Duello
   useEffect(() => {
-     // Handle Win Logic for Duello
      if (status === 'won' && gameMode === 'duello' && matchId && userUid) {
         updateDoc(doc(db, 'matches', matchId), {
            status: 'finished',
            winnerUid: userUid,
         }).catch(err => console.error(err));
-        // Faster wins could reward more, but fixed 15 for now
+        
         const reward = 15;
-        // The store handles adding coins/quests
-        useUserStore.getState().updateTrophies(reward);
-        useUserStore.getState().updateWinStreak(true);
+        if (!useGameStore.getState().isPrivateMatch) {
+           useUserStore.getState().updateTrophies(reward);
+           useUserStore.getState().updateWinStreak(true);
+        }
      }
   }, [status, gameMode, matchId, userUid]);
 
@@ -2403,7 +2415,7 @@ const GameScreen = () => {
             onClick={() => {
               if (gameMode === 'duello') {
                  // Geri çıkışı engelle
-                 alert("Düello menüsünden çıkamazsınız. Çıkmak için aşağıdaki koca kırmızı 'PES ET' butonunu kullanmalısınız!");
+                 alert(t('surrender_alert') || "Düello menüsünden çıkamazsınız. Çıkmak için aşağıdaki koca kırmızı 'PES ET' butonunu kullanmalısınız!");
               } else {
                  setView('menu');
               }
@@ -2420,13 +2432,13 @@ const GameScreen = () => {
                   gameMode === 'daily' ? 'text-orange-400' :
                   gameMode === 'duello' ? 'text-danger' : 'text-textMuted'
             )}>
-              {gameMode === 'online' ? 'Çevrimiçi Seri' :
-                gameMode === 'time_attack' ? `Skor: ${scoreCount}` :
-                  gameMode === 'daily' ? 'Günün Sorusu' :
-                  gameMode === 'duello' ? `Rakip ${opponentProgress} | Sen ${matchProgress} / ${boardSize * 2}` : 'Çevrimdışı'}
+              {gameMode === 'online' ? t('online_streak') :
+                gameMode === 'time_attack' ? `${t('score')}: ${scoreCount}` :
+                  gameMode === 'daily' ? t('daily_challenge') :
+                  gameMode === 'duello' ? `${t('opponent_short')} ${opponentProgress} | ${t('you_short')} ${matchProgress} / ${boardSize * 2}` : t('offline')}
             </span>
             <h1 className="text-2xl font-display font-black text-textMain">
-              {gameMode === 'daily' ? 'Meydan Okuma' : gameMode === 'duello' ? '1v1 Düello' : `Bölüm ${level}`}
+              {gameMode === 'daily' ? t('challenge') : gameMode === 'duello' ? t('duel_1v1') : `${t('level')} ${level}`}
             </h1>
           </div>
 
@@ -2476,7 +2488,7 @@ const GameScreen = () => {
         {gameMode !== 'duello' ? (
            <button onClick={useHint} disabled={useGameStore(s => s.hintsLeft) <= 0} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt disabled:opacity-50 disabled:cursor-not-allowed">
              <Lightbulb className="w-5 h-5 text-primary" />
-             <span className="font-display tracking-wide">İPUCU ({useGameStore(s => s.hintsLeft)})</span>
+             <span className="font-display tracking-wide">{t('hint')} ({useGameStore(s => s.hintsLeft)})</span>
            </button>
         ) : null}
         {gameMode === 'duello' && (
@@ -2485,7 +2497,7 @@ const GameScreen = () => {
              className="neo-button flex-1 h-20 bg-surfaceAlt border border-danger/30 text-danger rounded-[1.25rem] flex items-center justify-center gap-2 hover:bg-danger/20 transition-colors"
            >
               <X className="w-8 h-8" />
-              <span className="font-display font-black tracking-widest text-lg">PES ET</span>
+              <span className="font-display font-black tracking-widest text-lg">{t('surrender')}</span>
            </button>
         )}
         
