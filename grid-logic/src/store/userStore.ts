@@ -39,6 +39,8 @@ interface UserState {
   removeFriend: (friendUid: string) => Promise<void>;
   buyFriendSlot: () => Promise<boolean>;
   deletePlayer: (uid: string) => Promise<void>;
+  resetPlayerStats: (uid: string) => Promise<void>;
+  sendCoinsToUser: (uid: string, amount: number) => Promise<void>;
   initializeAuth: () => void;
 }
 
@@ -614,6 +616,38 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (!user || user.role !== 'admin') return;
     try {
       await deleteDoc(doc(db, 'users', uid));
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  resetPlayerStats: async (uid: string) => {
+    const { user } = get();
+    if (!user || user.role !== 'admin') return;
+    try {
+      const targetUserRef = doc(db, 'users', uid);
+      await updateDoc(targetUserRef, {
+        scores: { easy: 0, medium: 0, hard: 0, progressive: 0, time_attack: 0, daily: 0 },
+        levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
+        trophies: 0,
+        seasonTrophies: 0,
+        winStreak: 0
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  sendCoinsToUser: async (uid: string, amount: number) => {
+    const { user } = get();
+    if (!user || user.role !== 'admin') return;
+    try {
+      const targetUserRef = doc(db, 'users', uid);
+      const targetUserSnap = await getDoc(targetUserRef);
+      if (targetUserSnap.exists()) {
+        const currentCoins = targetUserSnap.data().coins || 0;
+        await updateDoc(targetUserRef, { coins: currentCoins + amount });
+      }
     } catch (e) {
       console.error(e);
     }

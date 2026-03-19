@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useGameStore } from './store/gameStore';
 import { useUserStore } from './store/userStore';
@@ -874,6 +874,8 @@ const LeaderboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'progressive' | 'hard' | 'time_attack' | 'trophies'>('progressive');
   const [seasonInfo, setSeasonInfo] = useState<{name: string, daysRemaining: number} | null>(null);
+  const [playerToReset, setPlayerToReset] = useState<any | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     import('./utils/season').then(({ getCurrentSeason }) => {
@@ -1009,16 +1011,14 @@ const LeaderboardScreen = () => {
                   <div className="flex items-center gap-2">
                     {user?.role === 'admin' && u.id !== user.uid && (
                       <button
-                        onClick={async (e) => {
+                        onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`${u.displayName || 'Oyuncu'} kalıcı olarak silinsin mi?`)) {
-                             await useUserStore.getState().deletePlayer(u.id);
-                             setLeaders(prev => prev.filter((l: any) => l.id !== u.id));
-                          }
+                          setPlayerToReset(u);
                         }}
-                        className="p-1.5 text-danger/40 hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
+                        className="p-1.5 text-orange-500/40 hover:text-orange-500 hover:bg-orange-500/10 rounded-lg transition-all"
+                        title="Skorları Sıfırla"
                       >
-                         <Trash2 className="w-4 h-4" />
+                         <RotateCcw className="w-4 h-4" />
                       </button>
                     )}
                     <div className={clsx(
@@ -1037,6 +1037,53 @@ const LeaderboardScreen = () => {
           </motion.div>
         )}
       </div>
+      {/* RESET MODAL */}
+      <AnimatePresence>
+        {playerToReset && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface border border-white/10 p-8 rounded-[2rem] w-full max-w-sm relative z-10 shadow-2xl"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600" />
+              <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-orange-500/20">
+                <RotateCcw className="w-8 h-8 text-orange-500" />
+              </div>
+              <h3 className="text-xl font-display font-black text-center mb-2">Skorları Sıfırla</h3>
+              <p className="text-textMuted text-sm text-center mb-8 px-2">
+                <span className="text-textMain font-bold">{playerToReset.displayName}</span> adlı oyuncunun tüm skorları sıfırlanacaktır. Emin misin?
+              </p>
+              <div className="flex gap-4">
+                <button 
+                  disabled={isResetting}
+                  onClick={() => setPlayerToReset(null)}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 font-bold rounded-xl transition-all"
+                >
+                  İptal
+                </button>
+                <button 
+                  disabled={isResetting}
+                  onClick={async () => {
+                    setIsResetting(true);
+                    try {
+                      await useUserStore.getState().resetPlayerStats(playerToReset.id);
+                      setLeaders(prev => prev.filter((l: any) => l.id !== playerToReset.id));
+                      playSuccess();
+                      setPlayerToReset(null);
+                    } catch(e) { console.error(e); playError(); }
+                    finally { setIsResetting(false); }
+                  }}
+                  className="flex-1 py-3 bg-orange-500 text-white font-black rounded-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  {isResetting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'SIFIRLA'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -2599,7 +2646,7 @@ const GameScreen = () => {
   const [opponentEmote, setOpponentEmote] = useState<string | null>(null);
   const [myEmote, setMyEmote] = useState<string | null>(null);
   const [showEmoteMenu, setShowEmoteMenu] = useState(false);
-  const [lastOpponentEmoteTime, setLastOpponentEmoteTime] = useState<number>(0);
+  const lastEmoteTimeRef = useRef<number>(0);
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
 
   const availableEmotes = ['👍', '👎'];
@@ -2618,59 +2665,65 @@ const GameScreen = () => {
       return () => clearInterval(timer);
     }
   }, [status, timeLeft, decrementTimeLeft, gameMode]);
-
   useEffect(() => {
     if (gameMode !== 'duello' || !matchId) return;
-    
-    // Evaluate my role once
-    if (userUid) {
-        getDoc(doc(db, 'matches', matchId)).then(snap => {
-            if (snap.exists()) {
-                const data = snap.data();
-                if (data.player1?.uid === userUid) setMyRole('player1');
-                else setMyRole('player2');
-            }
-        });
-    }
 
     // Listen to match document
-    const unsubscribe = onSnapshot(doc(db, 'matches', matchId), (snap) => {
+    const unsubscribe = onSnapshot(doc(db, 'matches', matchId as string), (snap) => {
        if (snap.exists()) {
          const data = snap.data();
+         
+         // Dynamically determine role if not set or verify it
+         let currentRole = myRole;
+         if (userUid) {
+             if (data.player1?.uid === userUid) {
+                 if (currentRole !== 'player1') {
+                    currentRole = 'player1';
+                    setMyRole('player1');
+                 }
+             } else if (data.player2?.uid === userUid) {
+                 if (currentRole !== 'player2') {
+                    currentRole = 'player2';
+                    setMyRole('player2');
+                 }
+             }
+         }
+
          if (data.status === 'finished') {
            const currentStatus = useGameStore.getState().status;
-           if (data.winnerUid !== userUid && currentStatus === 'playing') {
-              // We lost because opponent finished first or we surrendered
+           // If we are still playing but match is finished by opponent
+           if (data.winnerUid && data.winnerUid !== userUid && currentStatus === 'playing') {
               useGameStore.setState({ status: 'lost', isPrivateMatch: data.isPrivate || false });
               if (!data.isPrivate) {
-                 useUserStore.getState().updateTrophies(-10); // Penalty for losing
+                 useUserStore.getState().updateTrophies(-10);
                  useUserStore.getState().updateWinStreak(false);
               }
               playError();
            } else if (data.winnerUid === userUid && currentStatus === 'playing') {
-              // The opponent surrendered or disconnected making us the winner
+              // We won (maybe opponent surrendered)
               useGameStore.setState({ status: 'won', isPrivateMatch: data.isPrivate || false });
            }
          }
          
-         if (data.player1?.uid === userUid) {
+         // Sync progress and emotes based on role
+         if (currentRole === 'player1') {
              setOpponentProgress(data.player2Progress || 0);
-             if (data.player2Emote && data.player2Emote.time > lastOpponentEmoteTime) {
+             if (data.player2Emote && data.player2Emote.time > lastEmoteTimeRef.current) {
                  setOpponentEmote(data.player2Emote.emoji);
-                 setLastOpponentEmoteTime(data.player2Emote.time);
+                 lastEmoteTimeRef.current = data.player2Emote.time;
              }
-         } else {
+         } else if (currentRole === 'player2') {
              setOpponentProgress(data.player1Progress || 0);
-             if (data.player1Emote && data.player1Emote.time > lastOpponentEmoteTime) {
+             if (data.player1Emote && data.player1Emote.time > lastEmoteTimeRef.current) {
                  setOpponentEmote(data.player1Emote.emoji);
-                 setLastOpponentEmoteTime(data.player1Emote.time);
+                 lastEmoteTimeRef.current = data.player1Emote.time;
              }
          }
        }
     });
 
     return () => unsubscribe();
-  }, [gameMode, matchId, userUid]);
+  }, [gameMode, matchId, userUid, myRole]);
 
   // Push our progress to firebase when it changes
   useEffect(() => {
@@ -2787,19 +2840,6 @@ const GameScreen = () => {
             </div>
           )}
 
-          {/* User's own emote overlay */}
-          <AnimatePresence>
-              {myEmote && (
-                 <motion.div 
-                   initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                   exit={{ opacity: 0, scale: 0.8, y: -20 }}
-                   className="absolute bottom-[-10px] left-8 transform translate-y-full text-4xl drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] pointer-events-none z-50"
-                 >
-                    {myEmote}
-                 </motion.div>
-              )}
-          </AnimatePresence>
         </div>
       </header>
 
@@ -2810,13 +2850,28 @@ const GameScreen = () => {
         <AnimatePresence>
             {opponentEmote && gameMode === 'duello' && (
                 <motion.div
-                   initial={{ opacity: 0, scale: 0.5, y: 100 }}
-                   animate={{ opacity: 1, scale: 1, y: -20 }}
-                   exit={{ opacity: 0, scale: 0.8, y: -40 }}
-                   transition={{ type: "spring", damping: 15, stiffness: 200 }}
-                   className="absolute bottom-10 right-4 bg-white text-black p-4 rounded-[2rem] rounded-br-sm shadow-2xl text-5xl z-50 flex items-center justify-center border-4 border-black/10 origin-bottom-right"
+                   initial={{ opacity: 0, scale: 0.5, x: 50, y: 50 }}
+                   animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                   exit={{ opacity: 0, scale: 0.8 }}
+                   transition={{ type: "spring", damping: 12, stiffness: 200 }}
+                   className="absolute bottom-10 right-4 bg-white text-black p-3.5 rounded-[1.5rem] rounded-br-sm shadow-2xl text-4xl z-50 flex items-center justify-center border-4 border-black/5 origin-bottom-right"
                 >
                    {opponentEmote}
+                </motion.div>
+            )}
+        </AnimatePresence>
+
+        {/* My Emote Display */}
+        <AnimatePresence>
+            {myEmote && gameMode === 'duello' && (
+                <motion.div
+                   initial={{ opacity: 0, scale: 0.5, x: -50, y: 50 }}
+                   animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                   exit={{ opacity: 0, scale: 0.8 }}
+                   transition={{ type: "spring", damping: 12, stiffness: 200 }}
+                   className="absolute bottom-10 left-4 bg-primary/20 backdrop-blur-xl text-textMain p-3.5 rounded-[1.5rem] rounded-bl-sm shadow-2xl text-4xl z-50 flex items-center justify-center border-4 border-primary/30 origin-bottom-left"
+                >
+                   {myEmote}
                 </motion.div>
             )}
         </AnimatePresence>
@@ -3057,10 +3112,15 @@ const InvitationToast = () => {
 };
 
 const AdminPanel = () => {
-  const { setView, deletePlayer } = useUserStore();
+  const { setView, sendCoinsToUser, resetPlayerStats } = useUserStore();
   const [search, setSearch] = useState('');
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+  const [sendAmount, setSendAmount] = useState('1000');
+  const [isSending, setIsSending] = useState(false);
+  const [playerToReset, setPlayerToReset] = useState<any | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   const fetchPlayers = async () => {
     setLoading(true);
@@ -3078,6 +3138,28 @@ const AdminPanel = () => {
   useEffect(() => {
     fetchPlayers();
   }, []);
+
+  const handleConfirmSend = async () => {
+    if (!selectedPlayer) return;
+    const amount = parseInt(sendAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Lütfen geçerli bir miktar girin.');
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await sendCoinsToUser(selectedPlayer.id, amount);
+      setPlayers(prev => prev.map(item => item.id === selectedPlayer.id ? { ...item, coins: (item.coins || 0) + amount } : item));
+      playSuccess();
+      setSelectedPlayer(null);
+    } catch (e) {
+      console.error(e);
+      playError();
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const filteredPlayers = players.filter(p => 
     (p.displayName || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -3125,21 +3207,122 @@ const AdminPanel = () => {
                 <p className="text-[10px] text-yellow-500 font-bold">{p.coins} 💰</p>
                 <p className="text-[10px] text-primary font-bold">{p.trophies || 0} 🏆</p>
               </div>
-              <button
-                onClick={async () => {
-                  if (confirm(`${p.displayName} kalıcı olarak silinsin mi?`)) {
-                    await deletePlayer(p.id);
-                    setPlayers(prev => prev.filter(item => item.id !== p.id));
-                  }
-                }}
-                className="p-2 text-danger/40 hover:text-danger hover:bg-danger/10 rounded-xl transition-all"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setSelectedPlayer(p)}
+                  className="p-2 text-yellow-500/40 hover:text-yellow-500 hover:bg-yellow-500/10 rounded-xl transition-all"
+                  title="Altın Gönder"
+                >
+                  <Coins className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setPlayerToReset(p)}
+                  className="p-2 text-orange-500/40 hover:text-orange-500 hover:bg-orange-500/10 rounded-xl transition-all"
+                  title="Skorları Sıfırla"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         ))}
       </div>
+
+      {/* SEND COINS MODAL */}
+      <AnimatePresence>
+        {selectedPlayer && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isSending && setSelectedPlayer(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-surface border border-white/10 p-8 rounded-[2.5rem] w-full max-w-sm relative z-10 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 via-yellow-600 to-yellow-400" />
+              <h3 className="text-2xl font-display font-black text-center mb-2 text-yellow-500">Altın Gönder</h3>
+              <p className="text-textMuted text-[10px] text-center mb-8 uppercase tracking-widest leading-relaxed">
+                <span className="text-textMain font-bold">"{selectedPlayer.displayName}"</span> kullanıcısına gönderilecek miktar:
+              </p>
+              <div className="bg-bgStart border border-white/10 rounded-2xl p-4 mb-8">
+                 <div className="flex items-center gap-3">
+                    <Coins className="w-6 h-6 text-yellow-500" />
+                    <input 
+                       type="number"
+                       value={sendAmount}
+                       onChange={e => setSendAmount(e.target.value)}
+                       autoFocus
+                       className="bg-transparent border-none outline-none text-2xl font-display font-black text-textMain w-full"
+                    />
+                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <button disabled={isSending} onClick={() => setSelectedPlayer(null)} className="py-4 bg-white/5 hover:bg-white/10 text-textMuted font-bold rounded-2xl transition-all">İptal</button>
+                 <button disabled={isSending} onClick={handleConfirmSend} className="py-4 bg-yellow-500 text-black font-black rounded-2xl shadow-[0_10px_20px_rgba(234,179,8,0.3)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+                    {isSending ? <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <>GÖNDER <Check className="w-5 h-5" /></>}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* RESET STATS MODAL */}
+      <AnimatePresence>
+        {playerToReset && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isResetting && setPlayerToReset(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-surface border border-white/10 p-8 rounded-[2.5rem] w-full max-w-sm relative z-10 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 via-orange-600 to-orange-400" />
+              <div className="flex justify-center mb-4">
+                 <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-full flex items-center justify-center">
+                    <RotateCcw className="w-8 h-8 text-orange-500" />
+                 </div>
+              </div>
+              <h3 className="text-2xl font-display font-black text-center mb-2">Skorları Sıfırla</h3>
+              <p className="text-textMuted text-xs text-center mb-8 px-4 leading-relaxed">
+                 <span className="text-orange-500 font-bold">{playerToReset.displayName}</span> adlı oyuncunun tüm skorları ve kupaları kalıcı olarak sıfırlanacaktır. Emin misin?
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                 <button disabled={isResetting} onClick={() => setPlayerToReset(null)} className="py-4 bg-white/5 hover:bg-white/10 text-textMuted font-bold rounded-2xl transition-all">Vazgeç</button>
+                 <button 
+                    disabled={isResetting} 
+                    onClick={async () => {
+                       setIsResetting(true);
+                       try {
+                          await resetPlayerStats(playerToReset.id);
+                          setPlayers(prev => prev.map(item => item.id === playerToReset.id ? { ...item, scores: {}, levels: {}, trophies: 0, seasonTrophies: 0 } : item));
+                          playSuccess();
+                          setPlayerToReset(null);
+                       } catch(e) { console.error(e); playError(); }
+                       finally { setIsResetting(false); }
+                    }} 
+                    className="py-4 bg-orange-500 text-white font-black rounded-2xl shadow-[0_10px_20px_rgba(249,115,22,0.3)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                 >
+                    {isResetting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>EVET, SIFIRLA</>}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
