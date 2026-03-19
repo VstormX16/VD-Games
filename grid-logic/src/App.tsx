@@ -2252,7 +2252,7 @@ const VsScreen = () => {
 
 const GameScreen = () => {
   const t = useTranslation();
-  const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount, matchId, matchProgress, boardSize } = useGameStore();
+  const { level, gameMode, resetGrid, useHint, status, timeLeft, decrementTimeLeft, scoreCount, matchId, matchProgress, boardSize, hintsLeft } = useGameStore();
   const { setView, user } = useUserStore();
   
   const userUid = user?.uid;
@@ -2485,12 +2485,12 @@ const GameScreen = () => {
       </main>
 
       <footer className="p-6 flex gap-4 w-full max-w-md mx-auto relative z-40">
-        {gameMode !== 'duello' ? (
-           <button onClick={useHint} disabled={useGameStore(s => s.hintsLeft) <= 0} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt disabled:opacity-50 disabled:cursor-not-allowed">
+        {gameMode !== 'duello' && (
+           <button onClick={useHint} disabled={hintsLeft <= 0} className="neo-button flex-1 py-4 bg-surface text-textMain font-bold rounded-[1.25rem] flex items-center justify-center gap-2 border border-white/5 hover:bg-surfaceAlt disabled:opacity-50 disabled:cursor-not-allowed">
              <Lightbulb className="w-5 h-5 text-primary" />
-             <span className="font-display tracking-wide">{t('hint')} ({useGameStore(s => s.hintsLeft)})</span>
+             <span className="font-display tracking-wide">{t('hint')} ({hintsLeft})</span>
            </button>
-        ) : null}
+        )}
         {gameMode === 'duello' && (
            <button 
              onClick={() => setShowSurrenderModal(true)}
