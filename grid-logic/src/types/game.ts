@@ -2,7 +2,7 @@ export type CellState = 'active' | 'passive';
 export type CellType = 'normal' | 'negative' | 'locked' | 'unknown';
 export type GameMode = 'offline' | 'online' | 'daily' | 'time_attack' | 'duello';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'progressive' | 'time_attack' | 'daily';
-export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests' | 'vs_screen' | 'friend_duel' | 'friends';
+export type AppView = 'menu' | 'auth' | 'game' | 'leaderboard' | 'profile' | 'guide' | 'shop' | 'settings' | 'matchmaking' | 'quests' | 'vs_screen' | 'friend_duel' | 'friends' | 'admin_panel';
 
 export interface UserProfile {
   uid: string;
@@ -32,6 +32,7 @@ export interface UserProfile {
   friends?: string[]; // Array of friend UIDs
   friendSlots?: number; // Max friends allowed (default 5, purchasable)
   friendCode?: string; // Short 6-char code for easy friend adding
+  role?: 'admin' | 'user';
 }
 
 export interface CellData {

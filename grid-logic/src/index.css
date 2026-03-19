@@ -159,3 +159,75 @@ html[data-theme="theme_crimson"] {
   0% { background-position: 0 0; }
   100% { background-position: 1rem 0; }
 }
+
+/* Premium Animated Frames */
+@keyframes spin-glow {
+  0% { transform: rotate(0deg); filter: hue-rotate(0deg) brightness(1); }
+  50% { filter: hue-rotate(180deg) brightness(1.5); }
+  100% { transform: rotate(360deg); filter: hue-rotate(360deg) brightness(1); }
+}
+
+.frame-animated-glow {
+  position: relative;
+  z-index: 10;
+}
+.frame-animated-glow::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  background: conic-gradient(from 0deg, #A855F7, #EC4899, #3B82F6, #A855F7);
+  border-radius: 50%;
+  animation: spin-glow 3s linear infinite;
+  z-index: -1;
+  opacity: 0.8;
+  filter: blur(4px);
+}
+
+.frame-rainbow-cycle {
+  animation: rainbow-anim 4s linear infinite;
+  border-width: 4px;
+}
+@keyframes rainbow-anim {
+  0% { border-color: #ff0000; box-shadow: 0 0 10px #ff0000; }
+  20% { border-color: #ffff00; box-shadow: 0 0 10px #ffff00; }
+  40% { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; }
+  60% { border-color: #00ffff; box-shadow: 0 0 10px #00ffff; }
+  80% { border-color: #0000ff; box-shadow: 0 0 10px #0000ff; }
+  100% { border-color: #ff00ff; box-shadow: 0 0 10px #ff00ff; }
+}
+
+.frame-pulse-cyan {
+  animation: cyan-pulse 2s ease-in-out infinite;
+  border-color: #22d3ee;
+}
+@keyframes cyan-pulse {
+  0%, 100% { box-shadow: 0 0 5px #22d3ee, inset 0 0 5px #22d3ee; border-width: 2px; }
+  50% { box-shadow: 0 0 20px #22d3ee, inset 0 0 10px #22d3ee; border-width: 4px; opacity: 0.8; }
+}
+
+/* Grid Tap Particle Animation */
+@keyframes particle-pop {
+  0% { transform: scale(0); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: scale(3); opacity: 0; }
+}
+.tap-particle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: particle-pop 0.4s ease-out forwards;
+}
+
+/* Kilit (Lock) Animation */
+.lock-animated {
+  animation: lock-wiggle 3s ease-in-out infinite;
+}
+@keyframes lock-wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(1.1); }
+  50% { transform: rotate(10deg) scale(1.1); }
+  75% { transform: rotate(-5deg) scale(1.05); }
+}

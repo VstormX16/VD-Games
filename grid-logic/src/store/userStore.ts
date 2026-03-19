@@ -17,6 +17,9 @@ interface UserState {
   setView: (view: AppView) => void;
   clearRankUpData: () => void;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
+  syncUserProfile: (user: User, customDisplayName?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateScore: (points: number, levelInfo: number, difficulty: import('../types/game').Difficulty) => Promise<void>;
   updateCoins: (amount: number) => Promise<void>;
@@ -35,6 +38,7 @@ interface UserState {
   declineFriendRequest: (requestId: string) => Promise<void>;
   removeFriend: (friendUid: string) => Promise<void>;
   buyFriendSlot: () => Promise<boolean>;
+  deletePlayer: (uid: string) => Promise<void>;
   initializeAuth: () => void;
 }
 
@@ -53,49 +57,7 @@ export const useUserStore = create<UserState>((set, get) => ({
       set({ loading: true });
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      
-      // Check if user exists in Firestore
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      let profile: UserProfile;
-      if (userSnap.exists()) {
-        profile = userSnap.data() as UserProfile;
-        if (!profile.scores) {
-          profile.scores = { easy: 0, medium: 0, hard: 0, progressive: profile.totalScore || 0, time_attack: 0, daily: 0 };
-          profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1, time_attack: 1, daily: 1 };
-        }
-        if (typeof profile.coins !== 'number') profile.coins = 0;
-        if (typeof profile.trophies !== 'number') profile.trophies = 0;
-        if (!profile.inventory) profile.inventory = [];
-        if (!profile.equipped) profile.equipped = {};
-        if (typeof profile.playtimeSeconds !== 'number') profile.playtimeSeconds = 0;
-        if (typeof profile.playtimeRewardClaimed !== 'number') profile.playtimeRewardClaimed = 0;
-        if (!profile.friends) profile.friends = [];
-        if (typeof profile.friendSlots !== 'number') profile.friendSlots = 5;
-        if (typeof profile.loginStreak !== 'number') profile.loginStreak = 0;
-        if (typeof profile.winStreak !== 'number') profile.winStreak = 0;
-      } else {
-        profile = {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          scores: { easy: 0, medium: 0, hard: 0, progressive: 0, time_attack: 0, daily: 0 },
-          levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
-          coins: 100, // Welcome bonus
-          trophies: 0,
-          winStreak: 0,
-          inventory: [],
-          friends: [],
-          friendSlots: 5,
-          equipped: {},
-          friendCode: Math.random().toString(36).substring(2, 8).toUpperCase()
-        };
-        await setDoc(userRef, profile);
-      }
-      
-      set({ user: profile, currentView: 'menu' });
+      await get().syncUserProfile(user);
     } catch (error) {
       console.error("Login failed:", error);
     } finally {
@@ -103,18 +65,107 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  signInWithEmail: async (email, password) => {
+    try {
+      set({ loading: true });
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      await get().syncUserProfile(result.user);
+    } catch (error: any) {
+      console.error("Login failed:", error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  signUpWithEmail: async (email, password, displayName) => {
+    try {
+      set({ loading: true });
+      const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      const user = result.user;
+      
+      // Update firebase profile with display name
+      await updateProfile(user, { displayName });
+      
+      await get().syncUserProfile(user, displayName);
+    } catch (error: any) {
+      console.error("Sign up failed:", error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  syncUserProfile: async (user: User, customDisplayName?: string) => {
+    // Check if user exists in Firestore
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+    const isAdmin = user.email === 'admin@vdgames.com';
+    
+    let profile: UserProfile;
+    if (userSnap.exists()) {
+      profile = userSnap.data() as UserProfile;
+      // Merge/Fix data if needed
+      if (!profile.scores) {
+        profile.scores = { easy: 0, medium: 0, hard: 0, progressive: profile.totalScore || 0, time_attack: 0, daily: 0 };
+        profile.levels = { easy: 1, medium: 1, hard: 1, progressive: profile.highestLevel || 1, time_attack: 1, daily: 1 };
+      }
+      if (typeof profile.coins !== 'number') profile.coins = 0;
+      if (typeof profile.trophies !== 'number') profile.trophies = 0;
+      if (!profile.inventory) profile.inventory = [];
+      if (!profile.equipped) profile.equipped = {};
+      if (typeof profile.playtimeSeconds !== 'number') profile.playtimeSeconds = 0;
+      if (typeof profile.playtimeRewardClaimed !== 'number') profile.playtimeRewardClaimed = 0;
+      if (!profile.friends) profile.friends = [];
+      if (typeof profile.friendSlots !== 'number') profile.friendSlots = 5;
+      if (typeof profile.loginStreak !== 'number') profile.loginStreak = 0;
+      if (typeof profile.winStreak !== 'number') profile.winStreak = 0;
+    } else {
+      profile = {
+        uid: user.uid,
+        email: user.email,
+        displayName: isAdmin ? 'Admin' : (customDisplayName || user.displayName || 'İsimsiz Oyuncu'),
+        photoURL: user.photoURL,
+        scores: { easy: 0, medium: 0, hard: 0, progressive: 0, time_attack: 0, daily: 0 },
+        levels: { easy: 1, medium: 1, hard: 1, progressive: 1, time_attack: 1, daily: 1 },
+        coins: isAdmin ? 9999999 : 100, // Welcome bonus
+        trophies: 0,
+        winStreak: 0,
+        inventory: [],
+        friends: [],
+        friendSlots: 5,
+        equipped: {},
+        friendCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
+        role: isAdmin ? 'admin' : 'user'
+      };
+      await setDoc(userRef, profile);
+    }
+
+    if (isAdmin) {
+      profile.role = 'admin';
+      profile.displayName = 'Admin';
+      profile.coins = 9999999;
+    }
+    
+    set({ user: profile, currentView: 'menu' });
+  },
+
   logout: async () => {
     try {
+      set({ loading: true });
       await signOut(auth);
-      set({ user: null, currentView: 'menu' });
+      set({ user: null, currentView: 'menu', loading: false });
     } catch (error) {
       console.error("Logout failed:", error);
+      set({ loading: false });
     }
   },
 
   updateScore: async (points, levelInfo, difficulty) => {
     const { user } = get();
-    if (!user) return;
+    if (!user || user.role === 'admin') return;
 
     const newScore = (user.scores[difficulty] || 0) + points;
     const newHighestLevel = Math.max(user.levels[difficulty] || 1, levelInfo);
@@ -140,7 +191,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   updateCoins: async (amount) => {
     const { user } = get();
-    if (!user) return;
+    if (!user || user.role === 'admin') return;
     
     const newCoins = (user.coins || 0) + amount;
     set({ user: { ...user, coins: newCoins } });
@@ -155,7 +206,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   updateTrophies: async (amount) => {
     const { user } = get();
-    if (!user) return;
+    if (!user || user.role === 'admin') return;
     
     // Trophies cannot be less than 0
     const oldSeasonTrophies = user.seasonTrophies || 0;
@@ -183,7 +234,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   updateWinStreak: async (won: boolean) => {
     const { user } = get();
-    if (!user) return;
+    if (!user || user.role === 'admin') return;
     
     const newStreak = won ? (user.winStreak || 0) + 1 : 0;
     set({ user: { ...user, winStreak: newStreak } });
@@ -198,13 +249,13 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   buyItem: async (itemId: string, cost: number) => {
     const { user } = get();
-    if (!user || user.coins < cost) return false;
+    if (!user || (user.coins < cost && user.role !== 'admin')) return false;
     
     // Check if already owned (except consumables)
     const inventory = user.inventory || [];
     if (itemId !== 'streak_freeze' && inventory.includes(itemId)) return false;
 
-    const newCoins = user.coins - cost;
+    const newCoins = user.role === 'admin' ? 9999999 : (user.coins - cost);
     const newInventory = [...inventory, itemId];
     
     // Optimistic update
@@ -219,7 +270,6 @@ export const useUserStore = create<UserState>((set, get) => ({
       return true;
     } catch (error) {
       console.error("Error buying item:", error);
-      // Revert optimism if needed (ignoring for now to keep it simple)
       return false;
     }
   },
@@ -264,14 +314,14 @@ export const useUserStore = create<UserState>((set, get) => ({
       newStreak = (user.loginStreak || 0) + 1;
     } else if (user.lastLoginDate === twoDaysAgo && newInventory.includes('streak_freeze')) {
       newStreak = (user.loginStreak || 0) + 1;
-      newInventory = newInventory.filter(i => i !== 'streak_freeze'); // Tükemini sağla
+      newInventory = newInventory.filter(i => i !== 'streak_freeze'); 
     } else {
       newStreak = 1;
     }
     
     // Base reward = 50 coins + 10 per streak (up to 200)
     const reward = Math.min(200, 50 + newStreak * 10);
-    const newCoins = (user.coins || 0) + reward;
+    const newCoins = user.role === 'admin' ? 9999999 : ((user.coins || 0) + reward);
 
     const updatedUser = { ...user, coins: newCoins, lastLoginDate: today, loginStreak: newStreak, inventory: newInventory };
     set({ user: updatedUser });
@@ -303,7 +353,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (unclaimed <= 0) return 0;
 
     const reward = unclaimed * 100;
-    const newCoins = (user.coins || 0) + reward;
+    const newCoins = user.role === 'admin' ? 9999999 : ((user.coins || 0) + reward);
     const newClaimed = lastClaimed + unclaimed * REWARD_INTERVAL;
     const updatedUser = { ...user, coins: newCoins, playtimeRewardClaimed: newClaimed };
     set({ user: updatedUser });
@@ -319,7 +369,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   updateQuestProgress: async (action: import('../data/quests').QuestAction) => {
     const { user } = get();
-    if (!user) return;
+    if (!user || user.role === 'admin') return;
 
     const today = new Date().toISOString().split('T')[0];
     const weekStart = (() => {
@@ -375,7 +425,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
     if (hasDailyUpdates || hasWeeklyUpdates) {
        set({ user: updatedUser });
-       const payload: Record<string, string | Record<string, { count: number, claimed: boolean }>> = {};
+       const payload: Record<string, any> = {};
        if (hasDailyUpdates) {
            payload.dailyQuestsDate = today;
            if (updatedUser.dailyQuestsProgress) payload.dailyQuestsProgress = updatedUser.dailyQuestsProgress;
@@ -396,36 +446,34 @@ export const useUserStore = create<UserState>((set, get) => ({
     const { user } = get();
     if (!user) return;
 
-    if (isWeekly) {
-       const progress = { ...(user.weeklyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }>;
-       progress[questId] = { ...(progress[questId] || { count: 0 }), claimed: true };
-       const newCoins = (user.coins || 0) + reward;
-       const updated = { ...user, coins: newCoins, weeklyQuestsProgress: progress };
-       set({ user: updated });
-       try {
-         await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, weeklyQuestsProgress: progress });
-       } catch (e) { console.error(e); }
-    } else {
-       const progress = { ...(user.dailyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }>;
-       progress[questId] = { ...(progress[questId] || { count: 0 }), claimed: true };
-       const newCoins = (user.coins || 0) + reward;
-       const updated = { ...user, coins: newCoins, dailyQuestsProgress: progress };
-       set({ user: updated });
-        try {
-          await updateDoc(doc(db, 'users', user.uid), { coins: newCoins, dailyQuestsProgress: progress });
-        } catch (e) { console.error(e); }
-     }
+    const progress = isWeekly 
+      ? { ...(user.weeklyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }>
+      : { ...(user.dailyQuestsProgress || {}) } as Record<string, { count: number; claimed: boolean }>;
+    
+    progress[questId] = { ...(progress[questId] || { count: 0 }), claimed: true };
+    const newCoins = user.role === 'admin' ? 9999999 : ((user.coins || 0) + reward);
+    
+    const updated = isWeekly 
+      ? { ...user, coins: newCoins, weeklyQuestsProgress: progress }
+      : { ...user, coins: newCoins, dailyQuestsProgress: progress };
+
+    set({ user: updated });
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { 
+        coins: newCoins, 
+        [isWeekly ? 'weeklyQuestsProgress' : 'dailyQuestsProgress']: progress 
+      });
+    } catch (e) { console.error(e); }
   },
 
   claimSeasonReward: async () => {
     const { user } = get();
-    if (!user || !user.pendingSeasonReward) return false;
+    if (!user || (!user.pendingSeasonReward && user.role !== 'admin')) return false;
     
-    const newCoins = (user.coins || 0) + user.pendingSeasonReward.coins;
+    const rewardCoins = user.pendingSeasonReward?.coins || 0;
+    const newCoins = user.role === 'admin' ? 9999999 : ((user.coins || 0) + rewardCoins);
     
-    // Create new object without pendingSeasonReward
     const updatedUser = { ...user, coins: newCoins, pendingSeasonReward: null };
-    
     const rankUpData = get().rankUpData;
     set({ user: updatedUser, rankUpData });
     
@@ -451,10 +499,9 @@ export const useUserStore = create<UserState>((set, get) => ({
     
     const friends = user.friends || [];
     const maxSlots = user.friendSlots || 5;
-    if (friends.length >= maxSlots) return { success: false, error: 'Arkadaş slotun dolu! Mağazadan yeni slot al.' };
+    if (friends.length >= maxSlots && user.role !== 'admin') return { success: false, error: 'Arkadaş slotun dolu! Mağazadan yeni slot al.' };
     
     try {
-      // Look up user by friendCode
       const q = query(collection(db, 'users'), where('friendCode', '==', code));
       const snap = await getDocs(q);
       
@@ -466,16 +513,11 @@ export const useUserStore = create<UserState>((set, get) => ({
       
       if (friends.includes(friendUid)) return { success: false, error: 'Bu kişi zaten arkadaşın!' };
       
-      // Check friend's slot capacity
-      const friendFriends = friendData.friends || [];
-      const friendMaxSlots = friendData.friendSlots || 5;
-      if (friendFriends.length >= friendMaxSlots) return { success: false, error: 'Karşı tarafın arkadaş slotu dolu.' };
-      
-      // Add both sides
       const newFriends = [...friends, friendUid];
       set({ user: { ...user, friends: newFriends } });
       await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
       
+      const friendFriends = friendData.friends || [];
       if (!friendFriends.includes(user.uid)) {
         await updateDoc(doc(db, 'users', friendUid), { friends: [...friendFriends, user.uid] });
       }
@@ -495,31 +537,25 @@ export const useUserStore = create<UserState>((set, get) => ({
     const maxSlots = user.friendSlots || 5;
     
     if (friends.includes(fromUid)) {
-      // Already friends, just delete the request
       await deleteDoc(doc(db, 'friendRequests', requestId)).catch(() => {});
       return { success: true };
     }
-    if (friends.length >= maxSlots) return { success: false, error: 'Arkadaş slotun dolu!' };
+    if (friends.length >= maxSlots && user.role !== 'admin') return { success: false, error: 'Arkadaş slotun dolu!' };
     
     try {
-      // Add to both users' friends lists
       const newFriends = [...friends, fromUid];
       set({ user: { ...user, friends: newFriends } });
       await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
       
-      // Add to sender's list too
       const friendRef = doc(db, 'users', fromUid);
       const friendSnap = await getDoc(friendRef);
       if (friendSnap.exists()) {
-        const friendData = friendSnap.data();
-        const friendFriends = friendData.friends || [];
-        const friendMaxSlots = friendData.friendSlots || 5;
-        if (!friendFriends.includes(user.uid) && friendFriends.length < friendMaxSlots) {
+        const friendFriends = friendSnap.data().friends || [];
+        if (!friendFriends.includes(user.uid)) {
           await updateDoc(friendRef, { friends: [...friendFriends, user.uid] });
         }
       }
       
-      // Delete the request
       await deleteDoc(doc(db, 'friendRequests', requestId));
       return { success: true };
     } catch (e) {
@@ -545,7 +581,6 @@ export const useUserStore = create<UserState>((set, get) => ({
     
     try {
       await updateDoc(doc(db, 'users', user.uid), { friends: newFriends });
-      // Also remove from friend's list
       const friendRef = doc(db, 'users', friendUid);
       const friendSnap = await getDoc(friendRef);
       if (friendSnap.exists()) {
@@ -559,9 +594,9 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   buyFriendSlot: async () => {
     const { user } = get();
-    if (!user || user.coins < 5000) return false;
+    if (!user || (user.coins < 5000 && user.role !== 'admin')) return false;
     
-    const newCoins = user.coins - 5000;
+    const newCoins = user.role === 'admin' ? 9999999 : (user.coins - 5000);
     const newSlots = (user.friendSlots || 5) + 1;
     set({ user: { ...user, coins: newCoins, friendSlots: newSlots } });
     
@@ -574,17 +609,35 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
 
+  deletePlayer: async (uid: string) => {
+    const { user } = get();
+    if (!user || user.role !== 'admin') return;
+    try {
+      await deleteDoc(doc(db, 'users', uid));
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
   initializeAuth: () => {
     onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
         const userRef = doc(db, 'users', firebaseUser.uid);
         const userSnap = await getDoc(userRef);
+        const isAdmin = firebaseUser.email === 'admin@vdgames.com';
+
         if (userSnap.exists()) {
           const ud = userSnap.data() as UserProfile;
           if (!ud.scores) {
              ud.scores = { easy: 0, medium: 0, hard: 0, progressive: ud.totalScore || 0, time_attack: 0, daily: 0 };
              ud.levels = { easy: 1, medium: 1, hard: 1, progressive: ud.highestLevel || 1, time_attack: 1, daily: 1 };
           }
+          if (isAdmin) {
+            ud.role = 'admin';
+            ud.displayName = 'Admin';
+            ud.coins = 9999999;
+          }
+
           if (typeof ud.coins !== 'number') ud.coins = 0;
           if (typeof ud.trophies !== 'number') ud.trophies = 0;
           if (!ud.inventory) ud.inventory = [];
@@ -595,7 +648,6 @@ export const useUserStore = create<UserState>((set, get) => ({
           if (typeof ud.friendSlots !== 'number') ud.friendSlots = 5;
           if (typeof ud.loginStreak !== 'number') ud.loginStreak = 0;
 
-          // Generate friendCode if missing
           if (!ud.friendCode) {
             ud.friendCode = Math.random().toString(36).substring(2, 8).toUpperCase();
             updateDoc(userRef, { friendCode: ud.friendCode }).catch(console.error);
@@ -603,7 +655,6 @@ export const useUserStore = create<UserState>((set, get) => ({
 
           const currentSeason = getCurrentSeason();
           let needsUpdate = false;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const updateData: any = {};
 
           if (ud.seasonId !== currentSeason.id) {
@@ -618,9 +669,8 @@ export const useUserStore = create<UserState>((set, get) => ({
                      updateData.pendingSeasonReward = ud.pendingSeasonReward;
                  }
              }
-
              ud.seasonId = currentSeason.id;
-             ud.seasonTrophies = 0; // Reset season trophies
+             ud.seasonTrophies = 0;
              updateData.seasonId = currentSeason.id;
              updateData.seasonTrophies = 0;
              needsUpdate = true;
@@ -633,7 +683,9 @@ export const useUserStore = create<UserState>((set, get) => ({
              updateDoc(userRef, updateData).catch(console.error);
           }
         } else {
-          set({ user: null, loading: false }); // Failsafe
+          // If Firestore Doc doesn't exist yet, call syncUserProfile
+          await get().syncUserProfile(firebaseUser);
+          set({ loading: false });
         }
       } else {
         set({ user: null, loading: false });

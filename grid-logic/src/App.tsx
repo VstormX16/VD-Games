@@ -81,7 +81,7 @@ const MainMenu = () => {
         >
           <div className="flex items-center gap-1.5 text-yellow-500 font-bold font-mono text-sm">
             <Coins className="w-4 h-4" />
-            {user?.coins || 0}
+            {user?.role === 'admin' ? '∞' : (user?.coins || 0)}
           </div>
           <div className="w-px h-4 bg-white/10" />
           <div className="flex items-center gap-1.5 text-yellow-500 font-bold font-mono text-sm">
@@ -299,7 +299,8 @@ const MatchmakingScreen = () => {
               photoURL: user.photoURL || null,
               frame: user.equipped?.frame || null
             },
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            expiresAt: new Date(Date.now() + 86400000)
           });
           setStatus(`Oda Kuruldu: ${cleanCode}`);
 
@@ -368,7 +369,8 @@ const MatchmakingScreen = () => {
                 photoURL: user.photoURL || null,
                 frame: user.equipped?.frame || null
               },
-              createdAt: Date.now()
+              createdAt: Date.now(),
+              expiresAt: new Date(Date.now() + 86400000)
             });
 
             pingInterval = setInterval(() => {
@@ -398,7 +400,7 @@ const MatchmakingScreen = () => {
                 initAudio();
                 // Clear params ONLY when we are SURE we are starting
                 useUserStore.setState({ matchmakingParams: null });
-                startDuello(snap.id, opponentName || 'Rakip', data.seed, opponentUid, opponentPhotoURL, opponentFrame);
+                startDuello(snap.id, opponentName || 'Rakip', data.seed, opponentUid, opponentPhotoURL, opponentFrame, data.isPrivate);
                 setView('vs_screen');
               }, 1500);
             }
@@ -558,7 +560,7 @@ const FriendsScreen = () => {
     fetchFriends();
   }, [user?.friends]);
 
-  if (!user) { setView('menu'); return null; }
+  if (!user) return null;
 
   const handleAdd = async () => {
     setAddError(''); setAddSuccess('');
@@ -587,7 +589,8 @@ const FriendsScreen = () => {
         toUid: friendUidVal,
         roomCode: code,
         status: 'pending',
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        expiresAt: new Date(Date.now() + 86400000)
       });
       setAddSuccess('⚔️ Davet gönderildi! Arkadaşının kabul etmesini bekliyorsun...');
       // Now the sender also waits - go to matchmaking as creator
@@ -724,27 +727,141 @@ const FriendsScreen = () => {
 };
 
 const AuthScreen = () => {
-  const { signInWithGoogle, setView, loading } = useUserStore();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, setView, loading } = useUserStore();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!email || !password) {
+      setError('Lütfen tüm alanları doldur');
+      return;
+    }
+
+    try {
+      if (isSignUp) {
+        if (!displayName) {
+          setError('Lütfen bir oyuncu ismi belirle');
+          return;
+        }
+        await signUpWithEmail(email, password, displayName);
+      } else {
+        await signInWithEmail(email, password);
+      }
+      playSuccess();
+    } catch (err: any) {
+      let msg = 'Giriş başarısız oldu.';
+      if (err.code === 'auth/email-already-in-use') msg = 'bu e-posta zaten kullanımda.';
+      if (err.code === 'auth/invalid-email') msg = 'Geçersiz e-posta adresi.';
+      if (err.code === 'auth/wrong-password') msg = 'Hatalı şifre.';
+      if (err.code === 'auth/user-not-found') msg = 'Kullanıcı bulunamadı.';
+      setError(msg);
+      playError();
+    }
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-textMain">
-      <h2 className="text-3xl font-display font-black mb-4">Hoş Geldin!</h2>
-      <p className="text-center text-textMuted mb-8">
-        Çevrimiçi modda oynayıp puan kazanmak ve liderlik tablosuna girmek için Google ile giriş yapmalısın.
-      </p>
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-fade-in relative z-10 text-textMain overflow-y-auto">
+      <div className="w-full text-center mb-2">
+        <h2 className="text-4xl font-display font-black mb-2 animate-slide-up">
+          {isSignUp ? 'Aramıza Katıl!' : 'Hoş Geldin!'}
+        </h2>
+        <p className="text-textMuted text-sm">
+          {isSignUp ? 'Yeni bir hesap oluştur ve hemen oynamaya başla.' : 'Hesabına giriş yap ve kaldığın yerden devam et.'}
+        </p>
+      </div>
+
+      <div className="w-full glass-card p-8 rounded-[2.5rem] shadow-2xl border border-white/10">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isSignUp && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-black tracking-widest text-primary px-1">Oyuncu İsmi</label>
+              <div className="relative group">
+                <input
+                  type="text"
+                  placeholder="KralOyuncu123"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="w-full bg-bgStart border-2 border-white/5 rounded-2xl py-4 px-5 outline-none focus:border-primary/50 transition-all text-sm font-bold"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase font-black tracking-widest text-textMuted px-1">E-Posta</label>
+            <input
+              type="email"
+              placeholder="vstorm@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-bgStart border-2 border-white/5 rounded-2xl py-4 px-5 outline-none focus:border-white/20 transition-all text-sm font-bold"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase font-black tracking-widest text-textMuted px-1">Şifre</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-bgStart border-2 border-white/5 rounded-2xl py-4 px-5 outline-none focus:border-white/20 transition-all text-sm font-bold"
+            />
+          </div>
+
+          {error && (
+            <motion.p 
+              initial={{ opacity: 0, y: -10 }} 
+              animate={{ opacity: 1, y: 0 }}
+              className="text-danger text-xs font-bold text-center bg-danger/10 py-2 rounded-lg border border-danger/20"
+            >
+              {error}
+            </motion.p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="neo-button w-full py-4.5 bg-primary text-white font-display font-black text-lg rounded-2xl shadow-xl hover:shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 mt-4"
+          >
+            {loading ? 'İşleniyor...' : (isSignUp ? 'Kayıt Ol' : 'Giriş Yap')}
+          </button>
+        </form>
+
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-white/10" />
+          <span className="text-[10px] font-black text-textMuted uppercase tracking-tighter">Veya</span>
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
+
+        <button
+          onClick={() => { playClick(); signInWithGoogle(); }}
+          disabled={loading}
+          className="w-full py-4 bg-white text-bgStart font-bold rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-md group"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+          Google ile Devam Et
+        </button>
+
+        <button
+          onClick={() => { playClick(); setIsSignUp(!isSignUp); setError(''); }}
+          className="w-full mt-6 text-xs font-bold text-textMuted hover:text-textMain transition-colors"
+        >
+          {isSignUp ? 'Zaten hesabın var mı? Giriş Yap' : 'Henüz hesabın yok mu? Kayıt Ol'}
+        </button>
+      </div>
 
       <button
-        onClick={() => signInWithGoogle()}
-        disabled={loading}
-        className="neo-button w-full py-5 bg-white text-bgStart font-display font-bold text-xl rounded-2xl shadow-xl flex items-center justify-center gap-3"
+        onClick={() => { playClick(); setView('menu'); }}
+        className="text-textMuted hover:text-textMain flex items-center gap-2 font-bold text-sm opacity-60 hover:opacity-100 transition-all"
       >
-        {loading ? 'Yükleniyor...' : 'Google ile Giriş Yap'}
-      </button>
-
-      <button
-        onClick={() => setView('menu')}
-        className="text-textMuted mt-4 underline decoration-textMuted/30 hover:text-textMain"
-      >
+        <ArrowLeft className="w-4 h-4" />
         Geri Dön
       </button>
     </div>
@@ -752,6 +869,7 @@ const AuthScreen = () => {
 };
 
 const LeaderboardScreen = () => {
+  const { user } = useUserStore();
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'progressive' | 'hard' | 'time_attack' | 'trophies'>('progressive');
@@ -888,14 +1006,30 @@ const LeaderboardScreen = () => {
                 </div>
                 
                 <div className="flex flex-col items-end relative z-10">
-                  <div className={clsx(
-                    "font-display font-black text-2xl flex items-center gap-1",
-                    i === 0 ? "text-yellow-500" :
-                    i === 1 ? "text-gray-400" :
-                    i === 2 ? "text-orange-500" : "text-primary/90"
-                  )}>
-                    {activeTab === 'trophies' ? (u.seasonTrophies || 0) : (u.scores?.[activeTab] || 0)}
-                    {activeTab === 'trophies' && <span className="text-xl">🏆</span>}
+                  <div className="flex items-center gap-2">
+                    {user?.role === 'admin' && u.id !== user.uid && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm(`${u.displayName || 'Oyuncu'} kalıcı olarak silinsin mi?`)) {
+                             await useUserStore.getState().deletePlayer(u.id);
+                             setLeaders(prev => prev.filter((l: any) => l.id !== u.id));
+                          }
+                        }}
+                        className="p-1.5 text-danger/40 hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
+                      >
+                         <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    <div className={clsx(
+                      "font-display font-black text-2xl flex items-center gap-1",
+                      i === 0 ? "text-yellow-500" :
+                      i === 1 ? "text-gray-400" :
+                      i === 2 ? "text-orange-500" : "text-primary/90"
+                    )}>
+                      {activeTab === 'trophies' ? (u.seasonTrophies || 0) : (u.scores?.[activeTab] || 0)}
+                      {activeTab === 'trophies' && <span className="text-xl">🏆</span>}
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -908,16 +1042,40 @@ const LeaderboardScreen = () => {
 };
 
 const GuideScreen = () => {
-  return (
-    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-slide-up relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
-      <div className="flex items-center gap-4 mb-8 sticky top-0 py-2 bg-bgStart/90 backdrop-blur z-20">
-        <h2 className="text-3xl font-display font-black leading-none">Nasıl Oynanır?</h2>
-      </div>
+  const { setView } = useUserStore();
+  const t = useTranslation();
 
-      <div className="space-y-6">
+  return (
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto relative z-10 text-textMain overflow-hidden">
+      {/* Premium Sticky Header */}
+      <header className="w-full h-24 flex items-center px-6 pt-4 pb-2 z-30 bg-bgStart/80 backdrop-blur-2xl border-b border-white/5 shadow-2xl shrink-0">
+        <div className="flex items-center gap-4 w-full">
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setView('menu')}
+            className="p-3 bg-surface/50 rounded-2xl hover:bg-surface border border-white/10 neo-button shadow-lg text-textMuted hover:text-textMain transition-all"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </motion.button>
+          <div>
+            <h2 className="text-2xl font-display font-black tracking-tight text-textMain leading-none">{t('how_to_play')}</h2>
+            <div className="h-1 w-12 bg-primary rounded-full mt-2" />
+          </div>
+        </div>
+      </header>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto px-6 pt-8 pb-32 scrollbar-hide space-y-6">
         {/* Basic Rules */}
-        <div className="bg-surface p-6 rounded-[2rem] border border-white/5">
-          <h3 className="text-xl font-display font-bold text-primary mb-3">Temel Kural</h3>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-surface/50 backdrop-blur-sm p-6 rounded-[2.5rem] border border-white/5 shadow-xl"
+        >
+          <h3 className="text-xl font-display font-black text-primary mb-3 flex items-center gap-3">
+            <BookOpen className="w-5 h-5" />
+            {t('basic_rules') || "Temel Kural"}
+          </h3>
           <p className="text-textMuted text-sm leading-relaxed mb-4">
             Oyunun amacı çok basit: <span className="text-textMain font-bold">Kutuları seçerek</span> (üzerlerine tıklayıp aktif hale getirerek) satırların sonunda ve sütunların altında yazan
             <span className="text-textMain font-bold"> Hedef Sayılara</span> ulaşmak.
@@ -925,63 +1083,86 @@ const GuideScreen = () => {
           <p className="text-textMuted text-sm leading-relaxed">
             Tüm satır ve sütun hedefleri <span className="text-primary font-bold bg-primary/20 px-1 rounded">Doğru</span> olduğunda o bölümü kazanırsın!
           </p>
-        </div>
+        </motion.div>
 
         {/* Locked Boxes */}
-        <div className="bg-surface p-6 rounded-[2rem] border border-white/5 relative overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-surface/50 backdrop-blur-sm p-6 rounded-[2.5rem] border border-white/5 shadow-xl relative overflow-hidden"
+        >
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-[100px] pointer-events-none" />
           <Lock className="absolute top-6 right-6 w-8 h-8 text-textMain/20" />
 
-          <h3 className="text-xl font-display font-bold text-textMain mb-3">Asma Kilitli Kutular</h3>
+          <h3 className="text-xl font-display font-black text-textMain mb-3 flex items-center gap-3">
+             <Shield className="w-5 h-5 text-primary" />
+             {t('locked_boxes') || "Asma Kilitli Kutular"}
+          </h3>
           <p className="text-textMuted text-sm leading-relaxed mb-3">
             Bölümler ilerledikçe bazı kutularda asma kilit 🔒 göreceksin. Kilitli kutulara <span className="text-textMain font-bold underline">dokunamazsın.</span>
           </p>
-          <ul className="text-sm space-y-2 text-textMuted">
-            <li className="flex items-start gap-2">
-              <span className="text-primary mt-0.5">■</span>
-              <span>Eğer kilit <span className="text-textMain font-bold">Yeşil (Aktif)</span> durumdaysa, o sayı sana yardım olsun diye otomatik olarak verilmiştir ve hesaba katılmaz zorundadır.</span>
+          <ul className="text-sm space-y-3 text-textMuted">
+            <li className="flex items-start gap-3 bg-white/5 p-3 rounded-2xl">
+              <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0 shadow-[0_0_10px_#A855F7]" />
+              <span>Eğer kilit <span className="text-primary font-bold">Yeşil (Aktif)</span> durumdaysa, o sayı size yardım olsun diye otomatik verilmiştir ve hesaba katılır.</span>
             </li>
-            <li className="flex items-start gap-2">
-              <span className="text-textMuted/50 mt-0.5">■</span>
-              <span>Eğer kilit <span className="text-textMain font-bold">Gri (Pasif)</span> durumdaysa, o sayıyı kesinlikle kullanmamanı ister.</span>
+            <li className="flex items-start gap-3 bg-white/5 p-3 rounded-2xl">
+              <div className="w-2 h-2 rounded-full bg-textMuted/30 mt-1.5 shrink-0" />
+              <span>Eğer kilit <span className="text-textMain/50 font-bold">Gri (Pasif)</span> durumdaysa, o sayıyı kesinlikle kullanmamanı ister.</span>
             </li>
           </ul>
-        </div>
+        </motion.div>
 
         {/* Negative Boxes */}
-        <div className="bg-danger/5 border border-danger/20 p-6 rounded-[2rem] relative overflow-hidden">
-          <div className="absolute top-6 right-6 w-10 h-10 rounded-full bg-danger/20 text-danger flex items-center justify-center text-xl font-bold font-mono">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-danger/5 backdrop-blur-sm border border-danger/20 p-6 rounded-[2.5rem] shadow-xl relative overflow-hidden"
+        >
+          <div className="absolute top-6 right-6 w-12 h-12 rounded-2xl bg-danger/20 text-danger flex items-center justify-center text-2xl font-display font-black shadow-lg">
             -
           </div>
 
-          <h3 className="text-xl font-display font-bold text-danger mb-3">Negatif Mayınlar</h3>
+          <h3 className="text-xl font-display font-black text-danger mb-3 flex items-center gap-3">
+            <Zap className="w-5 h-5" />
+            {t('red_boxes') || "Negatif Mayınlar"}
+          </h3>
           <p className="text-textMuted text-sm leading-relaxed mb-3">
-            Zor zorluklarda bazı kutuların köşesinde "Kırmızı Eksi" bulunur. Bunlara tıkladığında sayıyı <span className="text-textMain font-bold">TOPLAMAZ, hedefinden ÇIKARIR.</span>
+            Zor seviyelerde bazı kutuların köşesinde "Kırmızı Eksi" bulunur. Bunlara tıkladığında sayıyı <span className="text-textMain font-bold">TOPLAMAZ, hedefinden ÇIKARIR.</span>
           </p>
-          <div className="bg-bgStart/50 p-3 rounded-xl border border-danger/10 text-xs text-textMuted/90">
-            <span className="text-danger font-bold">Örnek:</span> Hedefin 10 ise ve elinde [7], [5] ve [-2] varsa;<br />
-            7'yi aç + 5'i aç + kırmızı 2'yi aç =  <span className="text-textMain font-bold">7 + 5 - 2 = 10!</span>
+          <div className="bg-bgStart/50 p-4 rounded-2xl border border-danger/20 text-xs text-textMuted/90 leading-relaxed">
+            <span className="text-danger font-bold text-sm block mb-1">Örnek:</span> Hedefin 10 ise ve elinde [7], [5] ve [-2] varsa;<br />
+            7'yi aç + 5'i aç + kırmızı 2'yi aç = <span className="text-textMain font-bold text-sm">7 + 5 - 2 = 10!</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Unknown Boxes */}
-        <div className="bg-surface p-6 rounded-[2rem] border border-white/5 relative overflow-hidden">
-          <div className="absolute top-6 right-6 text-4xl font-display font-black text-textMain/10">?</div>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-surface/50 backdrop-blur-sm p-6 rounded-[2.5rem] border border-white/5 shadow-xl relative overflow-hidden"
+        >
+          <div className="absolute top-6 right-6 text-5xl font-display font-black text-textMain/5">?</div>
 
-          <h3 className="text-xl font-display font-bold text-textMain mb-3">Gizli Kutular</h3>
-          <p className="text-textMuted text-sm leading-relaxed mb-3">
+          <h3 className="text-xl font-display font-black text-textMain mb-3 flex items-center gap-3">
+            <Ghost className="w-5 h-5 text-primary" />
+            {t('unknown_boxes') || "Gizli Kutular"}
+          </h3>
+          <p className="text-textMuted text-sm leading-relaxed">
             Gerçek zeka testi burada başlar. İleri seviyelerde kutuların içinde sayı yerine <span className="text-textMain font-bold text-lg">?</span> yazar.
             İçinde ne yazdığını ancak satırın sonundaki hedeften geriye doğru matematik yaparak Sudoku gibi tahmin edebilirsin!
           </p>
-        </div>
-
+        </motion.div>
       </div>
     </div>
   );
 };
 
 const ShopScreen = () => {
-  const { user, setView } = useUserStore();
+  const { user } = useUserStore();
   const [isWatchingAd, setIsWatchingAd] = useState(false);
   const [showVideoOverlay, setShowVideoOverlay] = useState(false);
   const [currentAdUrl, setCurrentAdUrl] = useState("");
@@ -1021,10 +1202,7 @@ const ShopScreen = () => {
      return () => clearInterval(timer);
   }, [showVideoOverlay, canCloseAd]);
 
-  if (!user) {
-    setView('menu');
-    return null;
-  }
+  if (!user) return null;
 
   const handleWatchAd = async () => {
     if (isWatchingAd || showVideoOverlay) return;
@@ -1406,10 +1584,9 @@ const ShopScreen = () => {
             {/* Frame: Neon Halka */}
             <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-[#0ea5e9]/5 flex items-center justify-center border border-white/5 relative">
-                  <div className="w-10 h-10 rounded-full border-2 border-[#0ea5e9] shadow-[0_0_15px_rgba(14,165,233,0.5)]" />
-                  <Zap className="absolute -bottom-1 -left-1 w-5 h-5 text-[#0ea5e9]" />
-                </div>
+                <AvatarFrame frameId="frame_neon" className="w-16 h-16 shrink-0 border-2">
+                   <div className="w-8 h-8 rounded-full bg-[#0ea5e9]/20" />
+                </AvatarFrame>
                 <div>
                   <h3 className="font-display font-bold text-lg text-textMain">Neon Halka</h3>
                   <p className="text-textMuted text-xs">Profil avatarını siber mavi neon halkanın içine alır.</p>
@@ -1432,6 +1609,102 @@ const ShopScreen = () => {
                   useUserStore.getState().equipItem('frame', 'frame_neon');
                 }} className={`neo-button px-4 py-3 ${user.equipped?.frame === 'frame_neon' ? 'bg-[#0ea5e9]/20 text-[#0ea5e9] border-[#0ea5e9]/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
                    <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.frame === 'frame_neon' ? 'Kullanılıyor' : 'Kullan'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Frame: Efsanevi Parıltı (Premium) */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+              <div className="flex items-center gap-4">
+                <AvatarFrame frameId="frame_glow" className="w-16 h-16 shrink-0 border-none">
+                   <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center"><Crown className="w-6 h-6 text-primary" /></div>
+                </AvatarFrame>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-textMain">Efsanevi Parıltı</h3>
+                  <p className="text-textMuted text-xs">Dönen, renk değiştiren mistik bir aura ekler.</p>
+                </div>
+              </div>
+              
+              {!user.inventory?.includes('frame_glow') ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('frame_glow', 10000);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 animate-pulse">PREMIUM</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 10k</span>
+                 </button>
+              ) : (
+                <button onClick={() => {
+                  playClick();
+                  useUserStore.getState().equipItem('frame', 'frame_glow');
+                }} className={`neo-button px-4 py-3 ${user.equipped?.frame === 'frame_glow' ? 'bg-primary/20 text-primary border-primary/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.frame === 'frame_glow' ? 'Kullanılıyor' : 'Kullan'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Frame: Gökkuşağı */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+              <div className="flex items-center gap-4">
+                <AvatarFrame frameId="frame_rainbow" className="w-16 h-16 shrink-0 border-4">
+                   <div className="w-8 h-8 rounded-full bg-white/10" />
+                </AvatarFrame>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-textMain">Gökkuşağı</h3>
+                  <p className="text-textMuted text-xs">Sürekli renk değiştiren canlı bir kenarlık.</p>
+                </div>
+              </div>
+              
+              {!user.inventory?.includes('frame_rainbow') ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('frame_rainbow', 7500);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-green-500 to-blue-500">HAREKETLİ</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 7.5k</span>
+                 </button>
+              ) : (
+                <button onClick={() => {
+                  playClick();
+                  useUserStore.getState().equipItem('frame', 'frame_rainbow');
+                }} className={`neo-button px-4 py-3 ${user.equipped?.frame === 'frame_rainbow' ? 'bg-white/20 text-textMain border-white/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.frame === 'frame_rainbow' ? 'Kullanılıyor' : 'Kullan'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Frame: Siber Pulse */}
+            <div className="bg-surface p-4 rounded-3xl border border-white/5 flex items-center justify-between shadow-lg blur-0">
+              <div className="flex items-center gap-4">
+                <AvatarFrame frameId="frame_pulse" className="w-16 h-16 shrink-0 border-2">
+                   <div className="w-8 h-8 rounded-full bg-cyan-500/10" />
+                </AvatarFrame>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-textMain">Siber Pulse</h3>
+                  <p className="text-textMuted text-xs">Nefes alan, neon mavi bir enerji halkası.</p>
+                </div>
+              </div>
+              
+              {!user.inventory?.includes('frame_pulse') ? (
+                 <button onClick={async () => {
+                   playClick();
+                   const success = await useUserStore.getState().buyItem('frame_pulse', 4000);
+                   if (success) playSuccess();
+                   else playError();
+                 }} className="neo-button px-4 py-3 bg-yellow-500/10 text-yellow-500 font-bold rounded-xl border border-yellow-500/20 flex flex-col items-center justify-center gap-1 hover:bg-yellow-500/20 w-24">
+                   <span className="text-[10px] tracking-wider opacity-80 uppercase">Satın Al</span>
+                   <span className="flex items-center gap-1 font-black"><Coins className="w-4 h-4" /> 4000</span>
+                 </button>
+              ) : (
+                <button onClick={() => {
+                  playClick();
+                  useUserStore.getState().equipItem('frame', 'frame_pulse');
+                }} className={`neo-button px-4 py-3 ${user.equipped?.frame === 'frame_pulse' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-surfaceAlt text-textMain/50 border-white/10'} font-bold rounded-xl border flex flex-col items-center justify-center gap-1 hover:bg-white/10 w-24`}>
+                   <span className="text-xs tracking-wider uppercase whitespace-nowrap">{user.equipped?.frame === 'frame_pulse' ? 'Kullanılıyor' : 'Kullan'}</span>
                 </button>
               )}
             </div>
@@ -1479,16 +1752,37 @@ const PREDEFINED_AVATARS = [
   { id: 'Star', icon: Star, color: 'text-yellow-300', bg: 'bg-yellow-400/20' },
 ];
 
+const AvatarFrame = ({ frameId, children, className = "" }: { frameId?: string, children: React.ReactNode, className?: string }) => {
+  const getFrameClass = () => {
+    switch(frameId) {
+      case 'frame_fire': return 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]';
+      case 'frame_neon': return 'border-[#0ea5e9] shadow-[0_0_20px_rgba(14,165,233,0.6)]';
+      case 'frame_rainbow': return 'frame-rainbow-cycle border-4';
+      case 'frame_pulse': return 'frame-pulse-cyan border-2';
+      case 'frame_glow': return 'frame-animated-glow border-none';
+      default: return 'border-surfaceAlt';
+    }
+  };
+
+  return (
+    <div className={clsx("relative rounded-full border-4 flex items-center justify-center transition-all duration-500", getFrameClass(), className)}>
+      {children}
+      {frameId === 'frame_fire' && <Flame className="absolute -top-1 -right-1 w-6 h-6 text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]" />}
+      {frameId === 'frame_neon' && <Zap className="absolute -bottom-1 -left-1 w-6 h-6 text-[#0ea5e9] drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]" />}
+      {frameId === 'frame_glow' && (
+        <div className="absolute inset-x-0 bottom-0 top-0 bg-primary/10 rounded-full animate-pulse blur-md -z-10" />
+      )}
+    </div>
+  );
+};
+
 const ProfileScreen = () => {
   const { user, logout, setView } = useUserStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(user?.displayName || '');
   const [showAvatarModal, setShowAvatarModal] = useState(false);
 
-  if (!user) {
-    setView('menu');
-    return null;
-  }
+  if (!user) return null;
 
   const handleSaveName = async () => {
     const newName = editName.trim();
@@ -1547,16 +1841,18 @@ const ProfileScreen = () => {
           onClick={() => setShowAvatarModal(true)}
           className="relative group mb-6"
         >
-          {user.photoURL && !user.photoURL.startsWith('icon:') ? (
-            <img src={user.photoURL} alt="Profile" className={clsx("w-24 h-24 rounded-full border-4 object-cover", user.equipped?.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]' : 'border-surfaceAlt')} />
-          ) : (
-            <div className={clsx("w-24 h-24 rounded-full flex items-center justify-center border-4 transition-transform group-hover:scale-105", CurrentIconObj.bg, user.equipped?.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]' : user.equipped?.frame === 'frame_neon' ? 'border-[#0ea5e9] shadow-[0_0_20px_rgba(14,165,233,0.6)]' : 'border-surfaceAlt')}>
-              <CurrentIcon className={`w-12 h-12 ${CurrentIconObj.color}`} strokeWidth={1.5} />
+          <AvatarFrame frameId={user.equipped?.frame} className="w-28 h-28 border-4">
+            {user.photoURL && !user.photoURL.startsWith('icon:') ? (
+              <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
+            ) : (
+              <div className={clsx("w-24 h-24 rounded-full flex items-center justify-center transition-transform group-hover:scale-105", CurrentIconObj.bg)}>
+                <CurrentIcon className={`w-12 h-12 ${CurrentIconObj.color}`} strokeWidth={1.5} />
+              </div>
+            )}
+            <div className="absolute inset-x-0 bottom-0 top-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+              <Pencil className="w-6 h-6 text-textMain" />
             </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 top-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Pencil className="w-6 h-6 text-textMain" />
-          </div>
+          </AvatarFrame>
         </button>
 
         <div className="w-full flex justify-center items-center mb-1 h-12">
@@ -1631,6 +1927,16 @@ const ProfileScreen = () => {
         </div>
       </div>
 
+      {user.role === 'admin' && (
+        <button
+          onClick={() => setView('admin_panel')}
+          className="neo-button w-full py-4 bg-primary/10 text-primary border border-primary/20 font-bold rounded-2xl flex items-center justify-center gap-2 mb-4"
+        >
+          <Settings className="w-5 h-5 focus:animate-spin" />
+          Admin Paneli
+        </button>
+      )}
+
       <button
         onClick={async () => {
           await logout();
@@ -1689,10 +1995,7 @@ const QuestsScreen = () => {
   const [playtimeReward, setPlaytimeReward] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
 
-  if (!user) {
-    setView('menu');
-    return null;
-  }
+  if (!user) return null;
 
   const today = new Date().toISOString().split('T')[0];
   const twoDaysAgo = new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0];
@@ -1991,20 +2294,40 @@ const VictoryScreen = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
-      <div className="bg-surface border border-white/10 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-2xl relative z-10 overflow-hidden">
-        <h2 className="text-6xl font-display font-black text-textMain mb-2">{t('level')} {level}</h2>
+      <div className="bg-surface border border-white/10 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(255,255,255,0.05)] relative z-10 overflow-hidden">
+        {gameMode !== 'duello' && (
+          <h2 className="text-6xl font-display font-black text-textMain mb-2">{t('level')} {level}</h2>
+        )}
         {gameMode === 'duello' ? (
           <>
-            <p className="text-danger font-bold tracking-widest text-sm mb-6">{t('duel_won')}</p>
-            {!useGameStore.getState().isPrivateMatch && (
-              <div className="bg-bgStart p-4 rounded-2xl w-full border border-white/5 mb-6 flex flex-col items-center">
-                <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-1">{t('rank_points_earned')}</p>
-                <p className="text-3xl font-mono font-black text-yellow-500 flex items-center gap-2">
-                  +15 🏆
-                </p>
+            <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }}>
+              <div className="w-24 h-24 mx-auto bg-green-500/10 border-2 border-green-500/30 rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
+                <span className="text-5xl">🏆</span>
               </div>
+            </motion.div>
+            <h2 className="text-4xl font-display font-black text-green-400 drop-shadow-[0_0_10px_rgba(34,197,94,0.3)] mb-2 uppercase break-words w-full px-2">{t('duel_won')}</h2>
+            
+            {!useGameStore.getState().isPrivateMatch ? (
+              <>
+                <div className="bg-bgStart p-4 rounded-3xl w-full border border-green-500/20 mb-6 flex flex-col items-center shadow-inner">
+                  <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-2">{t('rank_points_earned')}</p>
+                  <p className="text-4xl font-mono font-black text-green-400 flex items-center gap-2 drop-shadow-md">
+                    +15
+                  </p>
+                </div>
+                <p className="text-textMuted/90 font-medium mb-8 leading-relaxed max-w-[200px] text-sm">{t('duel_won_desc')}</p>
+              </>
+            ) : (
+               <>
+                 <div className="bg-bgStart p-4 rounded-3xl w-full border border-white/5 mb-6 flex flex-col items-center shadow-inner">
+                   <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-2">{t('private_duel')}</p>
+                   <p className="text-lg font-mono font-bold text-textMain flex items-center gap-2 drop-shadow-md">
+                     GG WP!
+                   </p>
+                 </div>
+                 <p className="text-textMuted/90 font-medium mb-8 leading-relaxed max-w-[200px] text-sm">{t('private_duel_won_desc')}</p>
+               </>
             )}
-            <p className="text-textMuted mb-8 leading-relaxed">{t('duel_won_desc')}</p>
           </>
         ) : gameMode === 'daily' ? (
           <>
@@ -2104,12 +2427,20 @@ const DuelloLostScreen = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full max-w-md mx-auto p-6 gap-8 animate-slide-up relative z-10">
       <div className="bg-surface border border-danger/20 p-10 rounded-[3rem] text-center flex flex-col items-center w-full shadow-[0_0_50px_rgba(244,63,94,0.1)] relative z-10 overflow-hidden">
-        <h2 className="text-3xl font-display font-black text-danger mb-2 uppercase break-words w-full px-2">{opponent?.displayName ? opponent.displayName : t('opponent_short')}</h2>
-        <h3 className="text-2xl font-display font-black text-textMain mb-6">{t('opponent_won')}</h3>
+        <h2 className="text-2xl font-display font-black text-danger/80 mb-2 uppercase break-words w-full px-2">{opponent?.displayName ? opponent.displayName : t('opponent_short')}</h2>
+        <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: 'spring', bounce: 0.5 }}>
+           <h3 className="text-5xl font-display font-black text-danger drop-shadow-[0_0_15px_rgba(244,63,94,0.4)] mb-8">{t('opponent_won')}</h3>
+        </motion.div>
 
-        {!useGameStore.getState().isPrivateMatch && (
-           <div className="bg-bgStart p-6 rounded-2xl w-full border border-white/5 mb-8">
-             <p className="text-2xl font-mono font-black text-danger/80 line-through">-10 {t('rank_points_lost')} 🏆</p>
+        {!useGameStore.getState().isPrivateMatch ? (
+           <div className="bg-bgStart p-6 rounded-3xl w-full border border-danger/10 mb-8 shadow-inner flex flex-col items-center">
+             <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-2">{t('rank_points_lost')}</p>
+             <p className="text-3xl font-mono font-black text-danger/80 line-through">-10 🏆</p>
+           </div>
+        ) : (
+           <div className="bg-bgStart p-6 rounded-3xl w-full border border-white/5 mb-8 shadow-inner flex flex-col items-center">
+             <p className="text-textMuted text-[10px] font-bold uppercase tracking-wider mb-2">{t('private_duel')}</p>
+             <p className="text-lg font-mono font-bold text-textMain">NT!</p>
            </div>
         )}
 
@@ -2172,13 +2503,15 @@ const VsScreen = () => {
         transition={{ type: "spring", bounce: 0.4, duration: 0.8 }}
         className="flex flex-col items-center z-10 -mt-20"
       >
-        <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 shadow-2xl overflow-hidden relative bg-surface ${user.equipped?.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.6)]' : user.equipped?.frame === 'frame_neon' ? 'border-[#0ea5e9] shadow-[0_0_30px_rgba(14,165,233,0.6)]' : 'border-primary'}`}>
+        <AvatarFrame frameId={user.equipped?.frame} className="w-28 h-28 border-4">
            {user.photoURL && !user.photoURL.startsWith('icon:') ? (
-              <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
+              <img src={user.photoURL} alt="User" className="w-24 h-24 rounded-full object-cover" />
            ) : (
-              <UserIcon className={`w-14 h-14 ${UserIconObj.color}`} strokeWidth={1.5} />
+              <div className={clsx("w-24 h-24 rounded-full flex items-center justify-center bg-surface")}>
+                <UserIcon className={`w-14 h-14 ${UserIconObj.color}`} strokeWidth={1.5} />
+              </div>
            )}
-        </div>
+        </AvatarFrame>
         <h2 className="text-3xl font-display font-black mt-4 text-textMain drop-shadow-lg">{user.displayName || 'Sen'}</h2>
         <div className="bg-primary/20 px-4 py-1 rounded-full border border-primary/30 mt-2">
            <span className="text-primary font-bold tracking-widest text-xs uppercase">SEN</span>
@@ -2234,17 +2567,19 @@ const VsScreen = () => {
         transition={{ type: "spring", bounce: 0.4, duration: 0.8 }}
         className="flex flex-col items-center z-10"
       >
-        <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 shadow-2xl relative overflow-hidden bg-surface ${opponent.frame === 'frame_fire' ? 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.6)]' : opponent.frame === 'frame_neon' ? 'border-[#0ea5e9] shadow-[0_0_30px_rgba(14,165,233,0.6)]' : 'border-danger'}`}>
+        <div className="bg-danger/20 px-4 py-1 rounded-full border border-danger/30 mb-2">
+           <span className="text-danger font-bold tracking-widest text-xs uppercase text-sm">RAKİP</span>
+        </div>
+        <h2 className="text-3xl font-display font-black mb-4 text-textMain drop-shadow-lg">{opponent.displayName || 'Rakip'}</h2>
+        <AvatarFrame frameId={opponent.frame} className="w-28 h-28 border-4">
            {opponent.photoURL && !opponent.photoURL.startsWith('icon:') ? (
-              <img src={opponent.photoURL} alt="Opponent" className="w-full h-full object-cover" />
+              <img src={opponent.photoURL} alt="Opponent" className="w-24 h-24 rounded-full object-cover" />
            ) : (
-              <OppIcon className={`w-14 h-14 ${OppIconObj.color}`} strokeWidth={1.5} />
+              <div className={clsx("w-24 h-24 rounded-full flex items-center justify-center bg-surface")}>
+                <OppIcon className={`w-14 h-14 ${OppIconObj.color}`} strokeWidth={1.5} />
+              </div>
            )}
-        </div>
-        <h2 className="text-3xl font-display font-black mt-4 text-textMain drop-shadow-lg">{opponent.displayName}</h2>
-        <div className="bg-danger/20 px-4 py-1 rounded-full border border-danger/30 mt-2">
-           <span className="text-danger font-bold tracking-widest text-xs uppercase">RAKİP</span>
-        </div>
+        </AvatarFrame>
       </motion.div>
     </div>
   );
@@ -2303,16 +2638,18 @@ const GameScreen = () => {
        if (snap.exists()) {
          const data = snap.data();
          if (data.status === 'finished') {
-           if (data.winnerUid !== userUid && status === 'playing') {
-              useGameStore.setState({ status: 'lost' });
-              if (!useGameStore.getState().isPrivateMatch) {
+           const currentStatus = useGameStore.getState().status;
+           if (data.winnerUid !== userUid && currentStatus === 'playing') {
+              // We lost because opponent finished first or we surrendered
+              useGameStore.setState({ status: 'lost', isPrivateMatch: data.isPrivate || false });
+              if (!data.isPrivate) {
                  useUserStore.getState().updateTrophies(-10); // Penalty for losing
                  useUserStore.getState().updateWinStreak(false);
               }
               playError();
-           } else if (data.winnerUid === userUid && status === 'playing') {
+           } else if (data.winnerUid === userUid && currentStatus === 'playing') {
               // The opponent surrendered or disconnected making us the winner
-              useGameStore.setState({ status: 'won' });
+              useGameStore.setState({ status: 'won', isPrivateMatch: data.isPrivate || false });
            }
          }
          
@@ -2353,6 +2690,7 @@ const GameScreen = () => {
         }).catch(err => console.error(err));
         
         const reward = 15;
+        // Check both store and firebase data for safety
         if (!useGameStore.getState().isPrivateMatch) {
            useUserStore.getState().updateTrophies(reward);
            useUserStore.getState().updateWinStreak(true);
@@ -2565,9 +2903,14 @@ const GameScreen = () => {
               <div className="w-20 h-20 rounded-full bg-danger/20 flex items-center justify-center mb-5 border border-danger/30">
                 <X className="w-10 h-10 text-danger" />
               </div>
-              <h3 className="text-2xl font-display font-black text-textMain mb-2">Pes Etmek İstiyor Musun?</h3>
+              <h3 className="text-2xl font-display font-black text-textMain mb-2">
+                {t('surrender_confirm_title') || "Pes Etmek İstiyor Musun?"}
+              </h3>
               <p className="text-textMuted text-sm mb-8 leading-relaxed">
-                Bu düellodan çekilirsen <span className="text-danger font-bold">-10 kupa</span> kaybedeceksin ve rakibin kazanacak.
+                {useGameStore.getState().isPrivateMatch 
+                  ? (t('surrender_private_desc') || "Bu dostluk maçından çekilmek üzeresin. Herhangi bir kupa kaybı olmayacak.")
+                  : (t('surrender_desc') || "Bu düellodan çekilirsen kupa kaybedeceksin ve rakibin kazanacak.")
+                }
               </p>
               <div className="flex gap-3 w-full">
                 <motion.button
@@ -2713,11 +3056,117 @@ const InvitationToast = () => {
   );
 };
 
+const AdminPanel = () => {
+  const { setView, deletePlayer } = useUserStore();
+  const [search, setSearch] = useState('');
+  const [players, setPlayers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchPlayers = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'users'), limit(50));
+      const snap = await getDocs(q);
+      setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlayers();
+  }, []);
+
+  const filteredPlayers = players.filter(p => 
+    (p.displayName || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.email || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="flex flex-col w-full h-[100dvh] max-w-md mx-auto p-6 animate-fade-in relative z-10 text-textMain overflow-y-auto pb-28 scrollbar-hide">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => setView('profile')} className="p-3 bg-surface rounded-xl hover:bg-surfaceAlt border border-white/5 neo-button shrink-0">
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-3xl font-display font-black">Admin Paneli</h2>
+      </div>
+
+      <div className="bg-surface/50 border border-white/5 rounded-3xl p-4 mb-6">
+        <div className="flex items-center gap-3 bg-bgStart border border-white/10 rounded-xl p-2 px-4">
+          <Target className="w-5 h-5 text-textMuted" />
+          <input
+            type="text"
+            placeholder="Oyuncu ara (isim veya email)..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="bg-transparent border-none outline-none text-textMain text-sm w-full"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {loading ? (
+          <div className="text-center py-10 text-textMuted animate-pulse">Oyuncular yükleniyor...</div>
+        ) : filteredPlayers.map(p => (
+          <div key={p.id} className="bg-surface/40 backdrop-blur-md border border-white/5 p-4 rounded-2xl flex items-center justify-between group hover:bg-surface/60 transition-all">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30 text-primary font-bold">
+                {p.displayName?.[0] || '?'}
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-textMain">{p.displayName || 'İsimsiz'}</h4>
+                <p className="text-[10px] text-textMuted">{p.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-right mr-2">
+                <p className="text-[10px] text-yellow-500 font-bold">{p.coins} 💰</p>
+                <p className="text-[10px] text-primary font-bold">{p.trophies || 0} 🏆</p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (confirm(`${p.displayName} kalıcı olarak silinsin mi?`)) {
+                    await deletePlayer(p.id);
+                    setPlayers(prev => prev.filter(item => item.id !== p.id));
+                  }
+                }}
+                className="p-2 text-danger/40 hover:text-danger hover:bg-danger/10 rounded-xl transition-all"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const { currentView, initializeAuth, loading, user } = useUserStore();
 
   useEffect(() => {
     initializeAuth();
+    
+    // Passive Garbage Collection for Free Tier Firebase
+    // Removes matches and invitations older than 24h to save DB size without TTL billing
+    const runGC = async () => {
+      try {
+        const threshold = Date.now() - 24 * 60 * 60 * 1000;
+        
+        // Clean old matches (Max 10 reads to save quota)
+        const matchesQ = query(collection(db, 'matches'), where('createdAt', '<', threshold), limit(10));
+        getDocs(matchesQ).then(snap => snap.forEach(d => deleteDoc(d.ref).catch(() => {}))).catch(() => {});
+        
+        // Clean old invitations
+        const invQ = query(collection(db, 'invitations'), where('createdAt', '<', threshold), limit(10));
+        getDocs(invQ).then(snap => snap.forEach(d => deleteDoc(d.ref).catch(() => {}))).catch(() => {});
+      } catch (e) {}
+    };
+    // Run it once on app load with a small delay
+    setTimeout(runGC, 5000);
   }, [initializeAuth]);
 
   useEffect(() => {
@@ -2755,7 +3204,7 @@ export default function App() {
   }
 
   // Determine slide direction based on index to create a natural flow
-  const navOrder = ['quests', 'leaderboard', 'menu', 'shop', 'profile', 'settings', 'game', 'matchmaking', 'auth', 'guide'];
+  const navOrder = ['quests', 'leaderboard', 'menu', 'shop', 'profile', 'settings', 'game', 'matchmaking', 'auth', 'guide', 'admin_panel'];
   const viewIndex = navOrder.indexOf(currentView);
 
   const getSlideVariants = () => ({
@@ -2795,6 +3244,7 @@ export default function App() {
           {currentView === 'quests' && <QuestsScreen />}
           {currentView === 'settings' && <SettingsScreen />}
           {currentView === 'friends' && <FriendsScreen />}
+          {currentView === 'admin_panel' && <AdminPanel />}
         </motion.div>
       </AnimatePresence>
       

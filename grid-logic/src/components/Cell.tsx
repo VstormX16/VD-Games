@@ -11,6 +11,8 @@ interface CellProps {
 export const Cell: React.FC<CellProps> = ({ data }) => {
   const toggleCell = useGameStore(state => state.toggleCell);
   const boardSize = useGameStore(state => state.boardSize);
+  const [particles, setParticles] = React.useState<{ id: number; x: number; y: number }[]>([]);
+  const particleId = React.useRef(0);
 
   const isActive = data.state === 'active';
   const isLocked = data.type === 'locked';
@@ -39,9 +41,28 @@ export const Cell: React.FC<CellProps> = ({ data }) => {
     isLargeBoard ? 'w-2.5 h-2.5 top-1.5 right-1.5' :
     'w-3.5 h-3.5 top-2 right-2';
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (isLocked) return;
+    
+    // Add particle
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const newParticle = { id: particleId.current++, x, y };
+    setParticles(prev => [...prev, newParticle]);
+    
+    // Remove particle after animation
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => p.id !== newParticle.id));
+    }, 400);
+
+    toggleCell(data.row, data.col);
+  };
+
   return (
     <button
-      onClick={() => toggleCell(data.row, data.col)}
+      onClick={handleClick}
       disabled={isLocked}
       className={clsx(
         'grid-cell neo-button relative flex items-center justify-center font-display font-bold w-full select-none',
@@ -65,8 +86,17 @@ export const Cell: React.FC<CellProps> = ({ data }) => {
     >
       <span className={clsx("relative z-10 drop-shadow-md", isActive && "translate-y-[1px]")}>{displayValue}</span>
 
+      {/* Particles */}
+      {particles.map(p => (
+        <div 
+          key={p.id} 
+          className="tap-particle" 
+          style={{ left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }} 
+        />
+      ))}
+
       {isLocked && (
-        <Lock fill="currentColor" className={clsx("absolute text-textMain/20", lockSize)} />
+        <Lock fill="currentColor" className={clsx("absolute text-textMain/20", lockSize, isHugeBoard ? "" : "lock-animated")} />
       )}
       {isNegative && (
         <div className={clsx(
